@@ -121,12 +121,69 @@ export const StepEventTypeSchema = z.enum([
 ]);
 export type StepEventType = z.infer<typeof StepEventTypeSchema>;
 
-export const StepEventSchema = z.object({
+/**
+ * HotfixCategory — D-016 (P1.B 사이클, GB-1 채택 A안).
+ *
+ * TASTE.md §3 핫픽스 우선순위 4종(짜다/싱겁다/탄다/묽다) + 5번째 "기타"(자유 텍스트 보조).
+ * Cook Mode 핫픽스 UI는 5종 칩으로 분류 입력을 강제하되, "other"는 note 필드에 자유 텍스트를
+ * 동반한다. 학습 측(lib/runtime.ts:rebuildRuntimeLog)이 카테고리별 known_issues 집계를
+ * 가능하게 함 — 자유 텍스트 only로 가면 자연어 처리 부담이 학습 측에 떠넘겨진다.
+ *
+ * 본 enum은 StepEventSchema의 hotfix 변종에서만 category 필드로 사용된다.
+ * 다른 StepEvent type(done/timer_done/failed_here)에는 category가 없다.
+ */
+export const HotfixCategorySchema = z.enum([
+  "salty",
+  "bland",
+  "burnt",
+  "watery",
+  "other",
+]);
+export type HotfixCategory = z.infer<typeof HotfixCategorySchema>;
+
+/**
+ * StepEventSchema — discriminated union by `type`.
+ *
+ * hotfix 변종만 `category: HotfixCategory` 필수 필드를 가진다 (D-016).
+ * 다른 변종(done/timer_done/failed_here)은 category 없음 — 타입 시스템이 차단.
+ *
+ * note 정책:
+ *   - hotfix: optional (category=other이면 UI 측에서 자유 텍스트 요구; 본 스키마는 강제 안 함)
+ *   - failed_here: optional ("3번에서 탔음" 같은 메모)
+ *   - done/timer_done: optional (보통 비어 있음)
+ */
+const StepEventDoneSchema = z.object({
   step_index: z.number().int().min(0),
-  type: StepEventTypeSchema,
+  type: z.literal("done"),
   note: z.string().optional(),
   timestamp: TimestampSchema,
 });
+const StepEventTimerDoneSchema = z.object({
+  step_index: z.number().int().min(0),
+  type: z.literal("timer_done"),
+  note: z.string().optional(),
+  timestamp: TimestampSchema,
+});
+const StepEventHotfixSchema = z.object({
+  step_index: z.number().int().min(0),
+  type: z.literal("hotfix"),
+  category: HotfixCategorySchema,
+  note: z.string().optional(),
+  timestamp: TimestampSchema,
+});
+const StepEventFailedHereSchema = z.object({
+  step_index: z.number().int().min(0),
+  type: z.literal("failed_here"),
+  note: z.string().optional(),
+  timestamp: TimestampSchema,
+});
+
+export const StepEventSchema = z.discriminatedUnion("type", [
+  StepEventDoneSchema,
+  StepEventTimerDoneSchema,
+  StepEventHotfixSchema,
+  StepEventFailedHereSchema,
+]);
 export type StepEvent = z.infer<typeof StepEventSchema>;
 
 /**
@@ -137,15 +194,28 @@ export type StepEvent = z.infer<typeof StepEventSchema>;
 export const OutcomeSchema = z.enum(["good", "meh", "failed"]).nullable();
 export type Outcome = z.infer<typeof OutcomeSchema>;
 
-export const CookRunSchema = z.object({
-  id: UuidSchema,
-  recipe_id: UuidSchema,
-  user_id: UuidSchema,
-  started_at: TimestampSchema,
-  completed: z.boolean(),
-  outcome: OutcomeSchema,
-  step_events: z.array(StepEventSchema),
-});
+/**
+ * CookRunSchema — refine으로 §4 강제 규칙 "POSTMORTEM 없이 COOK 종료 불가"를
+ * 데이터 레벨에서 1차 차단 (GB-6 A안, P1.B 사이클).
+ *
+ * 규칙: completed=true && outcome===null → 검증 실패 "postmortem_required".
+ * 이 refine은 클라/라우트 양쪽에서 동일하게 작동한다. DB 레벨 2차 차단은
+ * supabase/migrations/0002_run_constraint.sql의 CHECK 제약이 담당 (방어 in depth).
+ */
+export const CookRunSchema = z
+  .object({
+    id: UuidSchema,
+    recipe_id: UuidSchema,
+    user_id: UuidSchema,
+    started_at: TimestampSchema,
+    completed: z.boolean(),
+    outcome: OutcomeSchema,
+    step_events: z.array(StepEventSchema),
+  })
+  .refine(
+    (run) => !(run.completed === true && run.outcome === null),
+    { message: "postmortem_required" },
+  );
 export type CookRun = z.infer<typeof CookRunSchema>;
 
 // ───────────────────────────────────────────────────────────────────────────
