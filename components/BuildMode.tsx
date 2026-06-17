@@ -101,74 +101,98 @@ export default function BuildMode({
   }
 
   return (
-    <section className="panel" aria-label="build-mode">
-      <div className="section-head">
+    <section className="panel compile-bench" aria-label="build-mode">
+      <div className="section-head bench-head">
         <div>
-          <h2>BUILD</h2>
-          <p className="muted">대화로 레시피 상태를 컴파일합니다.</p>
+          <span className="eyebrow">BUILD MODE</span>
+          <h2>Recipe compiler</h2>
+          <p className="muted">대화 입력을 RecipeState 패치로 컴파일합니다.</p>
         </div>
-        <span className="badge">stage: {stage}</span>
+        <span className="badge">compiler.stage::{stage}</span>
       </div>
 
-      <div className="stack">
-        <textarea
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="예: 김치랑 계란으로 빠르게 한 끼 만들고 싶어"
-        />
-        <div className="row">
-          <button type="button" onClick={submit} disabled={!canSubmit || busy}>
-            {busy ? "빌드 중" : "엔진 호출"}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => {
-              const sample: RecipeState = {
-                name: "팬 김치볶음밥",
-                concept: "김치와 계란으로 만드는 빠른 한 끼",
-                ingredients: [
-                  { name: "밥", amount: "1공기" },
-                  { name: "김치", amount: "1/2컵" },
-                  { name: "계란", amount: "1개" },
-                ],
-                tools: ["팬", "주걱"],
-                time_min: 12,
-                steps: [
-                  { text: "팬을 중불로 달구고 김치를 볶아 수분을 날린다.", timer_sec: 120 },
-                  { text: "밥을 넣고 김치와 고르게 섞는다.", timer_sec: 90 },
-                  { text: "한쪽에 계란을 익힌 뒤 밥과 섞어 마무리한다.", timer_sec: 60 },
-                ],
-              };
-              onRecipeStateChange(sample);
-              onStageChange("done");
-            }}
-          >
-            샘플 로드
-          </button>
+      <div className="compile-grid">
+        <div className="prompt-surface">
+          <div className="terminal-bar">
+            <span>prompt.stdin</span>
+            <span>{messages.length}/8 turns</span>
+          </div>
+          <textarea
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="냉장고 상태나 먹고 싶은 느낌을 입력"
+          />
+          <div className="row command-row">
+            <button type="button" onClick={submit} disabled={!canSubmit || busy}>
+              {busy ? "compiling..." : "compile recipe"}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                const sample: RecipeState = {
+                  name: "팬 김치볶음밥",
+                  concept: "김치와 계란으로 만드는 빠른 한 끼",
+                  ingredients: [
+                    { name: "밥", amount: "1공기" },
+                    { name: "김치", amount: "1/2컵" },
+                    { name: "계란", amount: "1개" },
+                  ],
+                  tools: ["팬", "주걱"],
+                  time_min: 12,
+                  steps: [
+                    { text: "팬을 중불로 달구고 김치를 볶아 수분을 날린다.", timer_sec: 120 },
+                    { text: "밥을 넣고 김치와 고르게 섞는다.", timer_sec: 90 },
+                    { text: "한쪽에 계란을 익힌 뒤 밥과 섞어 마무리한다.", timer_sec: 60 },
+                  ],
+                };
+                onRecipeStateChange(sample);
+                onStageChange("done");
+              }}
+            >
+              load fixture
+            </button>
+          </div>
         </div>
-        {error ? <div className="alert">{error}</div> : null}
-        {lastResponse ? <p>{lastResponse.message}</p> : null}
 
-        {lastDiff ? (
-          <ul className="diff-list" aria-label="diff">
-            {lastDiff.created.map((item) => (
-              <li key={`created-${String(item.field)}`}>
-                <strong>생성</strong> {String(item.field)}
-              </li>
-            ))}
-            {lastDiff.modified.map((item) => (
-              <li key={`modified-${String(item.field)}`}>
-                <strong>수정</strong> {String(item.field)}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <div className="compiler-output">
+          <div className="terminal-bar">
+            <span>compiler.stdout</span>
+            <span>{lastResponse ? "ok" : "idle"}</span>
+          </div>
+          {error ? <div className="alert">{error}</div> : null}
+          {lastResponse ? (
+            <div className="output-line">{lastResponse.message}</div>
+          ) : (
+            <div className="output-line muted">엔진 출력이 여기에 표시됩니다.</div>
+          )}
 
-        <div>
-          <h3>현재 RecipeState</h3>
+          {lastDiff ? (
+            <ul className="diff-list artifact-list" aria-label="diff">
+              {lastDiff.created.map((item) => (
+                <li key={`created-${String(item.field)}`}>
+                  <span className="diff-kind created">artifact</span>
+                  <strong>{String(item.field)}</strong>
+                </li>
+              ))}
+              {lastDiff.modified.map((item) => (
+                <li key={`modified-${String(item.field)}`}>
+                  <span className="diff-kind modified">patch</span>
+                  <strong>{String(item.field)}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="state-inspector">
+        <div className="terminal-bar">
+          <span>RecipeState.object</span>
+          <span>{previewItems.length} fields</span>
+        </div>
           {previewItems.length === 0 ? (
-            <p className="muted">아직 확정된 필드가 없습니다.</p>
+          <p className="muted">아직 확정된 필드가 없습니다.</p>
           ) : (
             <ul className="recipe-list">
               {previewItems.map(([key, value]) => (
@@ -179,7 +203,6 @@ export default function BuildMode({
               ))}
             </ul>
           )}
-        </div>
       </div>
     </section>
   );

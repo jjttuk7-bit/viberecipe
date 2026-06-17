@@ -14,9 +14,9 @@ type PostmortemProps = {
 };
 
 const OUTCOMES: Array<{ value: NonNullable<Outcome>; label: string }> = [
-  { value: "good", label: "좋음" },
-  { value: "meh", label: "그냥" },
-  { value: "failed", label: "망함" },
+  { value: "good", label: "PASS" },
+  { value: "meh", label: "WARN" },
+  { value: "failed", label: "FAIL" },
 ];
 
 export default function Postmortem({
@@ -86,13 +86,14 @@ export default function Postmortem({
   }
 
   return (
-    <section className="panel" aria-label="postmortem">
-      <div className="section-head">
+    <section className="panel report-bench" aria-label="postmortem">
+      <div className="section-head bench-head">
         <div>
-          <h2>POSTMORTEM</h2>
-          <p className="muted">조리 결과를 RuntimeLog와 Fingerprint로 보냅니다.</p>
+          <span className="eyebrow">POSTMORTEM</span>
+          <h2>run.report()</h2>
+          <p className="muted">CookRun을 RuntimeLog와 Fingerprint로 커밋합니다.</p>
         </div>
-        <span className="badge">건너뛰기 없음</span>
+        <span className="badge">skip:false</span>
       </div>
 
       {!recipeId || !userId ? (
@@ -101,47 +102,81 @@ export default function Postmortem({
         </div>
       ) : null}
 
-      <div className="stack">
-        <div className="outcome-grid">
-          {OUTCOMES.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              aria-pressed={outcome === item.value}
-              onClick={() => setOutcome(item.value)}
-            >
-              {item.label}
-            </button>
-          ))}
+      <div className="report-grid">
+        <div className="result-panel">
+          <div className="terminal-bar">
+            <span>run.result</span>
+            <span>{outcome ?? "uncommitted"}</span>
+          </div>
+          <div className="outcome-grid">
+            {OUTCOMES.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                className={`result-button result-${item.value}`}
+                aria-pressed={outcome === item.value}
+                onClick={() => setOutcome(item.value)}
+              >
+                <span>{item.label}</span>
+                <small>{item.value}</small>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {outcome === "failed" ? (
-          <div className="stack">
-            <label>
-              실패한 스텝
-              <select
-                value={failedStep}
-                onChange={(event) => setFailedStep(event.target.value)}
-              >
-                {Array.from({ length: stepCount }, (_, index) => (
-                  <option key={index} value={index}>
-                    스텝 {index}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <input
-              value={failedNote}
-              onChange={(event) => setFailedNote(event.target.value)}
-              placeholder="예: 여기서 탔음"
-            />
+        <div className="trace-panel">
+          <div className="terminal-bar">
+            <span>stack.trace.pin</span>
+            <span>{outcome === "failed" ? "required" : "standby"}</span>
           </div>
-        ) : null}
+          {outcome === "failed" ? (
+            <div className="stack trace-body">
+              <label>
+                failed_step_index
+                <select
+                  value={failedStep}
+                  onChange={(event) => setFailedStep(event.target.value)}
+                >
+                  {Array.from({ length: stepCount }, (_, index) => (
+                    <option key={index} value={index}>
+                      step {index}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <input
+                value={failedNote}
+                onChange={(event) => setFailedNote(event.target.value)}
+                placeholder="예: 여기서 탔음"
+              />
+            </div>
+          ) : (
+            <div className="trace-body muted">
+              FAIL 결과를 선택하면 실패 스텝을 RuntimeLog에 핀으로 남깁니다.
+            </div>
+          )}
+        </div>
 
-        <button type="button" onClick={submit} disabled={!canSubmit || busy}>
-          {busy ? "저장 중" : "회고 저장"}
-        </button>
-        {status ? <div className="alert">{status}</div> : null}
+        <div className="commit-panel">
+          <div className="terminal-bar">
+            <span>commit.target</span>
+            <span>save_cook_run RPC</span>
+          </div>
+          <div className="commit-body">
+            <div className="metric-row">
+              <span>step_events</span>
+              <strong>{events.length}</strong>
+            </div>
+            <div className="metric-row">
+              <span>completed</span>
+              <strong>true</strong>
+            </div>
+            <button type="button" onClick={submit} disabled={!canSubmit || busy}>
+              {busy ? "committing..." : "commit run report"}
+            </button>
+            {status ? <div className="alert">{status}</div> : null}
+          </div>
+        </div>
       </div>
     </section>
   );

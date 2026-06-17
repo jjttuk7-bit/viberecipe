@@ -19,61 +19,97 @@ export default function HomePage(): React.ReactElement {
 
   const userId = useMemo(() => readJwtSub(authToken), [authToken]);
   const canCook = Boolean(recipeState?.steps?.length);
+  const pipeline = [
+    {
+      key: "build",
+      label: "BUILD",
+      meta: stage === "done" ? "compiled" : `stage:${stage}`,
+      active: mode === "build",
+      enabled: true,
+      onClick: () => setMode("build"),
+    },
+    {
+      key: "cook",
+      label: "COOK",
+      meta: canCook ? "runnable" : "no steps",
+      active: mode === "cook",
+      enabled: canCook,
+      onClick: () => setMode("cook"),
+    },
+    {
+      key: "postmortem",
+      label: "POSTMORTEM",
+      meta: cookEvents.length > 0 ? `${cookEvents.length} events` : "waiting",
+      active: mode === "postmortem",
+      enabled: cookEvents.length > 0,
+      onClick: () => setMode("postmortem"),
+    },
+    {
+      key: "learn",
+      label: "LEARN",
+      meta: "RuntimeLog -> Fingerprint",
+      active: false,
+      enabled: false,
+      onClick: () => undefined,
+    },
+  ];
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand">
+    <main className="ide-shell">
+      <header className="command-header">
+        <div className="brand-block">
+          <span className="eyebrow">PAIR-COOKING IDE</span>
           <h1>바이브 레시피</h1>
-          <p>BUILD → COOK → POSTMORTEM</p>
+          <p>{"recipe.build() -> kitchen.run() -> postmortem.write()"}</p>
         </div>
-        <div className="field">
-          <label htmlFor="auth-token">Supabase bearer JWT</label>
-          <input
-            id="auth-token"
-            value={authToken}
-            onChange={(event) => setAuthToken(event.target.value)}
-            placeholder="eyJ..."
-          />
+
+        <div className="command-grid" aria-label="runtime credentials">
+          <div className="field command-field">
+            <label htmlFor="auth-token">AUTH TOKEN</label>
+            <input
+              id="auth-token"
+              value={authToken}
+              onChange={(event) => setAuthToken(event.target.value)}
+              placeholder="Bearer JWT"
+            />
+          </div>
+          <div className="field command-field">
+            <label htmlFor="recipe-id">RECIPE ID</label>
+            <input
+              id="recipe-id"
+              value={recipeId}
+              onChange={(event) => setRecipeId(event.target.value)}
+              placeholder="uuid"
+            />
+          </div>
         </div>
-        <div className="field">
-          <label htmlFor="recipe-id">기존 recipe_id</label>
-          <input
-            id="recipe-id"
-            value={recipeId}
-            onChange={(event) => setRecipeId(event.target.value)}
-            placeholder="uuid"
-          />
+
+        <div className="status-cluster" aria-label="session state">
+          <span className="status-pill ok">{authToken ? "auth:armed" : "auth:missing"}</span>
+          <span className="status-pill">{recipeId.trim() ? "recipe:linked" : "recipe:manual"}</span>
+          <span className="status-pill hot">{mode}.mode</span>
         </div>
       </header>
 
-      <nav className="mode-tabs" aria-label="mode">
-        <button
-          type="button"
-          aria-current={mode === "build"}
-          onClick={() => setMode("build")}
-        >
-          BUILD
-        </button>
-        <button
-          type="button"
-          aria-current={mode === "cook"}
-          disabled={!canCook}
-          onClick={() => setMode("cook")}
-        >
-          COOK
-        </button>
-        <button
-          type="button"
-          aria-current={mode === "postmortem"}
-          disabled={cookEvents.length === 0}
-          onClick={() => setMode("postmortem")}
-        >
-          POSTMORTEM
-        </button>
-      </nav>
+      <div className="ide-grid">
+        <nav className="pipeline-rail" aria-label="runtime pipeline">
+          {pipeline.map((item, index) => (
+            <button
+              key={item.key}
+              type="button"
+              className="pipeline-node"
+              aria-current={item.active}
+              disabled={!item.enabled}
+              onClick={item.onClick}
+            >
+              <span className="node-index">{String(index + 1).padStart(2, "0")}</span>
+              <span className="node-label">{item.label}</span>
+              <span className="node-meta">{item.meta}</span>
+            </button>
+          ))}
+        </nav>
 
-      <div className="workspace">
+        <section className="workbench" aria-label="active workbench">
         {mode === "build" ? (
           <BuildMode
             authToken={authToken}
@@ -105,17 +141,33 @@ export default function HomePage(): React.ReactElement {
             onSaved={() => setMode("build")}
           />
         ) : null}
+        </section>
 
-        <aside className="side-panel">
-          <h2>상태</h2>
+        <aside className="runtime-inspector">
+          <div className="inspector-head">
+            <span className="eyebrow">RUNTIME CONTEXT</span>
+            <h2>부엌 지문 대기실</h2>
+          </div>
           <div className="stack">
-            <span className="badge">user: {userId ?? "JWT 필요"}</span>
-            <span className="badge">recipe: {recipeId.trim() || "미입력"}</span>
-            <span className="badge">steps: {recipeState?.steps?.length ?? 0}</span>
-            <p className="muted">
-              현재는 로그인 UI와 recipe row 생성 API가 없어 JWT와 기존 recipe_id를
-              직접 넣는 작업용 화면입니다.
-            </p>
+            <div className="metric-row">
+              <span>user.sub</span>
+              <strong>{userId ? "parsed" : "missing"}</strong>
+            </div>
+            <div className="metric-row">
+              <span>recipe_id</span>
+              <strong>{recipeId.trim() ? "linked" : "manual"}</strong>
+            </div>
+            <div className="metric-row">
+              <span>RecipeState.steps</span>
+              <strong>{recipeState?.steps?.length ?? 0}</strong>
+            </div>
+            <div className="metric-row">
+              <span>CookRun.events</span>
+              <strong>{cookEvents.length}</strong>
+            </div>
+            <div className="context-note">
+              MVP 환경: 로그인/recipe 생성 API 전까지 JWT와 기존 recipe_id를 직접 연결합니다.
+            </div>
           </div>
         </aside>
       </div>

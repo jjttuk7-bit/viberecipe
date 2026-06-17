@@ -140,85 +140,117 @@ export default function CookMode({
 
   if (!recipe || steps.length === 0) {
     return (
-      <section className="panel" aria-label="cook-mode">
-        <h2>COOK</h2>
-        <p className="muted">조리할 steps가 있는 레시피가 필요합니다.</p>
+      <section className="panel runtime-bench" aria-label="cook-mode">
+        <span className="eyebrow">COOK MODE</span>
+        <h2>No runnable instructions</h2>
+        <p className="muted">조리할 steps가 있는 RecipeState가 필요합니다.</p>
       </section>
     );
   }
 
   return (
-    <section className="panel" aria-label="cook-mode">
-      <div className="section-head">
+    <section className="panel runtime-bench" aria-label="cook-mode">
+      <div className="section-head bench-head">
         <div>
-          <h2>COOK</h2>
+          <span className="eyebrow">COOK MODE</span>
+          <h2>kitchen.run()</h2>
           <p className="muted">{recipe.name ?? "이름 없는 레시피"}</p>
         </div>
-        <span className="badge">
-          {currentStep + 1}/{steps.length}
-        </span>
+        <span className="badge">instruction {currentStep + 1}/{steps.length}</span>
       </div>
 
-      <div className="step-stage">
-        <h3>{step?.text}</h3>
-        {step && step.timer_sec > 0 ? (
-          <div className="timer" aria-live="polite">
-            {formattedTime}
+      <div className="runtime-grid">
+        <div className="runtime-console">
+          <div className="terminal-bar">
+            <span>active.instruction</span>
+            <span>{timerRunning ? "running" : "paused"}</span>
           </div>
-        ) : (
-          <p className="muted">타이머 없는 스텝입니다.</p>
-        )}
-        <div className="row">
-          <button
-            type="button"
-            onClick={() => {
-              void requestNotifications();
-              setTimerRunning(true);
-            }}
-            disabled={!step || step.timer_sec === 0 || timerRunning}
-          >
-            타이머 시작
-          </button>
-          <button type="button" className="secondary" onClick={completeStep}>
-            {isLast ? "회고로 이동" : "스텝 완료"}
-          </button>
+          <div className="step-stage">
+            <span className="run-marker">RUNNING STEP</span>
+            <h3>{step?.text}</h3>
+            {step && step.timer_sec > 0 ? (
+              <div className="timer" aria-live="polite">
+                {formattedTime}
+              </div>
+            ) : (
+              <p className="muted">timer_sec=0 · 감각 기준으로 진행</p>
+            )}
+            <div className="row">
+              <button
+                type="button"
+                onClick={() => {
+                  void requestNotifications();
+                  setTimerRunning(true);
+                }}
+                disabled={!step || step.timer_sec === 0 || timerRunning}
+              >
+                start timer
+              </button>
+              <button type="button" className="secondary" onClick={completeStep}>
+                {isLast ? "open postmortem" : "mark done"}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {wakeMessage ? <div className="alert">{wakeMessage}</div> : null}
+        <div className="runtime-side">
+          <div className="env-panel">
+            <div className="terminal-bar">
+              <span>kitchen.env</span>
+              <span>{wakeMessage ? "checked" : "booting"}</span>
+            </div>
+            <div className="env-body">
+              {wakeMessage ? wakeMessage : "Wake Lock 상태를 확인 중입니다."}
+            </div>
+          </div>
 
-      <div className="stack">
-        <h3>인라인 핫픽스</h3>
-        <div className="hotfix-grid">
-          {HOTFIXES.map((item) => (
-            <button
-              key={item.category}
-              type="button"
-              aria-pressed={hotfixCategory === item.category}
-              onClick={() => setHotfixCategory(item.category)}
-            >
-              {item.label}
+          <div className="patch-deck">
+            <div className="terminal-bar">
+              <span>runtime.patch</span>
+              <span>RecipeState immutable</span>
+            </div>
+            <div className="hotfix-grid">
+              {HOTFIXES.map((item) => (
+                <button
+                  key={item.category}
+                  type="button"
+                  aria-pressed={hotfixCategory === item.category}
+                  onClick={() => setHotfixCategory(item.category)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <input
+              value={hotfixNote}
+              onChange={(event) => setHotfixNote(event.target.value)}
+              placeholder="예: 불을 낮춤, 물을 조금 추가"
+            />
+            <button type="button" className="secondary" onClick={addHotfix}>
+              append StepEvent.hotfix
             </button>
-          ))}
+          </div>
         </div>
-        <input
-          value={hotfixNote}
-          onChange={(event) => setHotfixNote(event.target.value)}
-          placeholder="예: 불을 낮춤, 물을 조금 추가"
-        />
-        <button type="button" className="secondary" onClick={addHotfix}>
-          이번 회차에만 기록
-        </button>
       </div>
 
-      <ul className="event-list">
-        {events.map((event, index) => (
-          <li key={`${event.timestamp}-${index}`}>
-            <strong>{event.type}</strong> 스텝 {event.step_index}
-            {"note" in event && event.note ? ` · ${event.note}` : ""}
-          </li>
-        ))}
-      </ul>
+      <div className="execution-log">
+        <div className="terminal-bar">
+          <span>CookRun.step_events</span>
+          <span>{events.length} events</span>
+        </div>
+        <ul className="event-list">
+          {events.length === 0 ? (
+            <li className="muted">런타임 이벤트가 아직 없습니다.</li>
+          ) : null}
+          {events.map((event, index) => (
+            <li key={`${event.timestamp}-${index}`}>
+              <span className="event-type">{event.type}</span>
+              <strong>step {event.step_index}</strong>
+              {"note" in event && event.note ? <span>{event.note}</span> : null}
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }
