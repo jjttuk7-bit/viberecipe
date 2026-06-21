@@ -2,7 +2,7 @@
 
 > 새 파일/모듈을 만들면 여기 갱신한다. Claude Code가 "어디에 뭐가 있나"를 빠르게 파악하기 위한 지도.
 > 상태 표기: ✅ 구현됨 / 🚧 진행중 / 📋 placeholder (시그니처/주석만, 본문 P1+에서 채움)
-> 마지막 갱신: 2026-06-18 (세션 3 — P1 Cook 사이드 루프 구현)
+> 마지막 갱신: 2026-06-21 (세션 9 — D-027 2-pane 레이아웃 + 임베드 공간 분리)
 
 ---
 
@@ -10,10 +10,11 @@
 
 | 경로 | 역할 | 상태 |
 |---|---|---|
-| `app/layout.tsx` | RootLayout(`lang="ko"`). 전역 메타 + body 래퍼. children만 렌더. | ✅ (셸 적정) |
-| `app/page.tsx` | 엔트리. BUILD/COOK/POSTMORTEM 모드 전환 + Supabase bearer JWT/기존 recipe_id 입력 + RecipeState/CookRun 상태 연결. 로그인/recipe row 생성 전까지의 작업용 MVP 컨테이너. | ✅ |
-| `app/api/recipe/route.ts` | BUILD 엔진 라우트. `enforceRateLimit("recipe")` → env 가드 → `RequestBodySchema.safeParse` → `authenticateRequest` (Authorization Bearer JWT → anon 클라 검증 → user_id) → `fetchBuildContext` (D-013 1회 재시도 후 502) → `callEngineWithRetry` (D-004 1회 재시도 → 200 `{ engineResponse, parsedAt }` 또는 502). `splitDiff`는 클라 책임 (응답에 mods 미포함). | ✅ |
+| `app/layout.tsx` | RootLayout(`lang="ko"`). **D-026**: `next/font/google`로 Newsreader/JetBrains Mono 등록 → CSS 변수 `--font-newsreader`/`--font-jetbrains-mono` 노출. `<html className>`에 variable 적용. | ✅ |
+| `app/page.tsx` | 엔트리. BUILD/COOK/POSTMORTEM 모드 전환 + dev-shelf(작업용 JWT/recipe_id) + RecipeState/CookRun 상태. **D-027**: pipeline-rail / runtime-inspector 제거. `<section.mode-stage>` + `<aside.page-footer-aside>`(FingerprintCard) 단순 구조. 모드 전환은 헤더 `쿡 모드 →` 버튼 + Cook 종료 자동 진입. | ✅ |
+| `app/api/recipe/route.ts` | BUILD 엔진 라우트. `enforceRateLimit("recipe")` → env 가드 → `RequestBodySchema.safeParse` → `authenticateRequest` → `fetchBuildContext` (D-013) → `callEngineWithRetry` (D-004) → 200 `{ engineResponse, parsedAt, context_used }` (D-025 — 서버가 buildContext 메타 변환 노출). `EngineResponseSchema` 변경 0. `splitDiff`는 클라 책임. | ✅ |
 | `app/api/run/route.ts` | COOK→POSTMORTEM 결과 영속 라우트. rate limit → `authenticateRequest` → `CookRunSchema.safeParse` → 기존 cook_runs/runtime_logs 조회 → `rebuildRuntimeLog` → `recomputeFingerprint` → 사용자 JWT 클라로 `save_cook_run` RPC 단일 호출. | ✅ |
+| `app/api/fingerprint/route.ts` | **신설**. Fingerprint 단건 조회 GET 라우트(D-019 SSOT). `enforceRateLimit("fingerprint")` → `authenticateRequest` → `fetchFingerprintForUser` (D-013 패턴 1회 재시도 후 502) → `200 { fingerprint: Fingerprint \| null }`. | ✅ |
 
 ## 라이브러리 (lib/)
 
@@ -26,6 +27,8 @@
 | `lib/prompt.ts` | 페어 쿠킹 시스템 프롬프트 빌더. `buildSystemPrompt({ stage, buildContext, recipeState? })` 본문 — 10절 결합(맹탕 모드 헤더 / 역할 / 파이프라인 / 일괄 위임 키워드 / Fingerprint / known_issues / RecipeState / 불변 규칙 / TASTE 분기 / 출력 계약). `trimKnownIssues(issues, budget=5)` 헬퍼 export — D-012 미해결 우선 N=5. D-014 stage별 TASTE 인용 + `_exhaustive: never` 가드. 순수 함수(env/시각/랜덤/전역 0). | ✅ |
 | `lib/buildContext.ts` | **신설**. `fetchBuildContext({ recipeId, userId })` — service-role 클라이언트로 `runtime_logs` + `fingerprints` 병렬 조회 후 `BuildContextSchema.parse`. recipe_id=null이면 runtime_logs 조회 스킵. 둘 다 null → `cold_start=true` 결정. `.maybeSingle()` 사용으로 row 0 정상 경로. throw는 라우트의 D-013 1회 재시도 catch가 잡음. `import "server-only"`. | ✅ |
 | `lib/auth.ts` | **신설**. `authenticateRequest(request)` — Authorization Bearer JWT 검증, anon 클라 `auth.getUser`, `{ userId, token }` 반환. `/api/recipe`와 `/api/run`의 D-015 인증 SSOT. | ✅ |
+| `lib/stagePlan.ts` | **신설 (PC 사이클, D-024)**. STAGE_PLANS 5 stage(concept/base/taste/steps/done) required/optional 필드 SSOT. `RecipeField = keyof RecipeState` 컴파일 결합. `FIELD_LABELS`/`isFieldFilled` 헬퍼. UI(StagePlanCard)와 다른 SSOT 모듈이 본 모듈을 *읽기만*. 재정의 금지. | ✅ |
+| `lib/fingerprintStore.ts` | **신설 (FP 사이클)**. `fetchFingerprintForUser(userId): Promise<Fingerprint \| null>` — service-role 단건 조회 + `FingerprintSchema.parse` jsonb 안전화. `/api/fingerprint`의 D-019 SSOT. `lib/buildContext.ts`의 결합 조회와는 목적 분리 2개 SSOT. | ✅ |
 | `lib/diff.ts` | `splitDiff(prev, next): { created, modified }` — 새 필드는 created, 기존 필드 변경은 modified로 분리(D-001/D-002). | ✅ |
 | `lib/runtime.ts` | `rebuildRuntimeLog(recipeId, runs): RuntimeLog` — `failed_here`/`hotfix` step_events를 step별 known_issues로 응축. hotfix 5종(D-016) 처리 + 이후 good run이면 resolved 처리. | ✅ |
 | `lib/fingerprint.ts` | `recomputeFingerprint(userId, runtimeLogs): Fingerprint` — RuntimeLog 교차분석으로 trait 생성. D-017 기준(N≥3 + 비율≥0.6)을 적용. | ✅ |
@@ -34,10 +37,10 @@
 
 | 파일 | 역할 | 상태 |
 |---|---|---|
-| `components/BuildMode.tsx` | F-1 BUILD UI. `/api/recipe` 호출, EngineResponse 병합, `splitDiff` 표시, 샘플 레시피 로드. 현재는 JWT/recipe_id 직접 입력 기반 작업용 MVP. | ✅ |
+| `components/BuildMode.tsx` | **풀 재작성(DR2 사이클, D-027)** — 2-pane 구조. `<section.build-bench> > <stage-progress> + <build-canvas grid> > <chat-side> + <recipe-side>`. 좌측 chat-side: 채팅 + 옵션 칩 + Warnings 인라인 + build-input. 우측 recipe-side: sticky `<RecipeCanvas>` (산출물 + 메타 + 변경 표식 + 빈 상태). 신규 하위 컴포넌트 `<RecipeCanvas>` / `<StagePlanCardMini>` / `<ContextMetaCardMini>`. D-022 mutation(칩 ✕ / +/-)은 RecipeCanvas에서 호출, state는 BuildMode 단일 출처. D-023 undo / messages 무한 누적 / D-024 Plan / D-025 Context / D-026 디자인 토큰 모두 정합. `/api/recipe` 요청/응답 변경 0. | ✅ |
 | `components/CookMode.tsx` | F-2 COOK UI. 스텝 진행, `timer_sec` 타이머, Notification 요청, Wake Lock fallback, 핫픽스 5종 기록. RecipeState 수정 콜백 없음(D-006). | ✅ |
 | `components/Postmortem.tsx` | F-3 POSTMORTEM UI. 3단 outcome, failed 시 실패 스텝 핀포인트, `/api/run` 제출. 건너뛰기 없음. | ✅ |
-| `components/FingerprintCard.tsx` | (미생성) 부엌 지문 프로필 노출. 전환 비용 가시화. ROADMAP P1 마지막 항목. | 📋 (P1) |
+| `components/FingerprintCard.tsx` | **신설 (FP 사이클)**. 부엌 지문 프로필 노출(D-007/D-019). `GET /api/fingerprint` 호출, 4 상태(idle/loading/ready/error). `refreshNonce` prop으로 Postmortem 저장 직후 재페치(용접 가시성). confidence 백분율 표시(D-020). cold-start 메시지(TASTE §4 톤). | ✅ |
 
 ## 데이터베이스 (supabase/)
 
@@ -62,7 +65,7 @@
 | 파일 | 역할 |
 |---|---|
 | `../CLAUDE.md` | 최상위 헌법 (매 세션 first read). §9 변경 이력에 P0 사이클 등록. |
-| `DECISIONS.md` | ADR — 모든 설계 결정. D-001~D-015. D-011 = P0 셸 부트스트랩, D-012/D-013/D-014/D-015 = P1 엔진 코어 사이클(known_issues 트리밍 / BuildContext 502 / TASTE stage 분기 / 인증 경계 정책). D-001은 P1에서 결과 섹션에 부분 객체 + splitDiff 결합 한 줄 명시화. |
+| `DECISIONS.md` | ADR — D-001~D-027. D-011 = P0 셸, D-012~D-015 = P1 엔진 코어, D-016~D-018 = P1 Cook, D-019/D-020 = Fingerprint 노출, D-021 = BUILD 대화형, D-022/D-023 = 사용자 직접 수정 + 에디트 히스토리, D-024 = Plan 가시화, D-025 = Context 투명성, D-026 = 디자인 시스템 SSOT, **D-027 = 2-pane 레이아웃 (임베드 공간 분리)**. D-001/D-002/D-021 결과 섹션 누적 보강. |
 | `PRD.md` | 제품 요구사항. |
 | `CONCEPT_2.0.md` | VIBE 2.0 기획서 (Cook=Run 서사 원본). |
 | `DATA_MODEL.md` | 데이터 모델 + 용접 의존성. `lib/schema.ts`·`0001_init.sql`의 의도 문서. |
@@ -89,12 +92,25 @@
 
 ---
 
-## 현재 상태 요약 (2026-06-18)
+## 현재 상태 요약 (2026-06-21, 세션 6 직후)
 
 - **P0 완료**: rate limit + env 격리 + 셸 부트스트랩 23 파일.
-- **P1 첫 묶음 완료**: 엔진 코어 — `lib/prompt.ts` 본문 + `lib/buildContext.ts` 신설 + `app/api/recipe/route.ts` 본문. welding-inspector P1.T4 PASS (결함 0건). ADR D-012/D-013/D-014 등재.
-- **P1 Cook 사이드 구현**: `lib/auth.ts`, `lib/diff.ts`, `lib/runtime.ts`, `lib/fingerprint.ts`, `/api/run`, `BuildMode`, `CookMode`, `Postmortem`, `app/page.tsx` 본문. ADR D-016/D-017/D-018 등재.
-- **빌드 가능성**: `npm install && npm run typecheck && npm run build`가 server-only 위반을 빌드 타임에 잡는 형태. 사용자가 더미 키 채워 검증 권고 (Anthropic SDK + 인증 흐름 추가됨 — `.env.local` 채워야 런타임 호출 통과).
-- **다음 큰 작업**: 로그인 UI/세션 영속 + recipe row 생성/저장 API + `FingerprintCard.tsx` + 실제 Supabase end-to-end 저장 검증.
-- **용접 강제 상태(§4)**: BUILD→Context 주입과 Cook→Postmortem→RuntimeLog/Fingerprint RPC 루프가 코드로 연결됨. 단, 실제 저장은 기존 recipe row와 JWT가 필요하다.
-- **잔존 위험**: recipe 생성 API 부재, 로그인/세션 UX 부재, 실제 Supabase 마이그레이션 적용 전 end-to-end 저장 미검증.
+- **P1 첫 묶음 완료**: 엔진 코어 (D-012~D-014).
+- **P1 Cook 사이드 완료** (D-016~D-018).
+- **P1 마무리 완료 (2026-06-20)**: FingerprintCard + /api/fingerprint + lib/fingerprintStore (D-019/D-020). ROADMAP P1 8/8.
+- **BUILD 리디자인 완료 (2026-06-21 세션 5)**: 대화형 UX 복원 (D-021).
+- **고도화 사이클 1 완료 (2026-06-21 세션 6)**: 사용자 직접 수정 + 에디트 히스토리. ADR D-022/D-023 등재. D-001/D-002/D-021 결과 섹션 보강.
+- **고도화 사이클 2 완료 (2026-06-21 세션 7)**: Plan 가시화 + Context 투명성. `lib/stagePlan.ts` 신설, `/api/recipe` 응답 wrapper에 `context_used` 추가, `<StagePlanCard>` + `<ContextMetaCard>` 임베드 최상단 배치. ADR D-024/D-025 등재. D-021 결과 섹션에 *임베드 2층위* 명시화. welding-inspector PC.T4 PASS 결함 0.
+- **디자인 사이클 1 (DR1) 완료 (2026-06-21 세션 8)**: 사용자 스크린샷 기반. 색 5종 + 폰트 3종 + 마이크로 요소 (pair-chef "셰" 아바타 + 사용자 칩 검정/흰 + 원형 주황 ↑ + aux-chip + 헤더 brand-line/autosave/cook-mode-btn). D-026 등재. TASTE §6 확정.
+- **디자인 사이클 2 (DR2) 완료 (2026-06-21 세션 9)**: 2-pane 레이아웃 — 좌 chat-side(채팅+옵션칩+Warnings 인라인+입력) / 우 recipe-side sticky `<RecipeCanvas>`(산출물 + 메타 mini + 변경 칩 + 빈 상태). pipeline-rail / runtime-inspector 제거. FingerprintCard 페이지 하단 이동. h1/p 제거 헤더 슬림화. D-027 등재. D-021 결과 섹션 *공간 분리* 보강. welding-inspector DR2.T3 PASS 결함 0. /api/recipe·schema 변경 0.
+- **빌드 가능성**: `npm run typecheck` + `npm test`(6/6) 그린.
+- **다음 큰 작업 (사용자 선언 우선순위 — API/로그인은 마지막)**:
+  - 다른 고도화 축들 (② Plan 가시화 / ④ Context 투명성 / ⑤ Slash command) — 사용자 선택
+  - 비편집 필드(name/concept/steps/time_min) 편집 도입 — 다음 고도화
+  - 다중 undo / 영속 (`recipe_versions`) — P2 인증 사이클 동반
+  - mutation 메시지 시그널 강화 (`[user-edit]` prefix)
+  - dead CSS (IDE 풍 12종) 정리
+  - v3 다크 톤 전체 통일 검토
+  - **OpenAI 전환 + 로그인 베이스 인증** — 사용자 명시 "마지막에"
+- **용접 강제 상태(§4)**: 데이터 용접 + UX 표면 §1.3/D-002/D-003 정신 모두 코드 연결. 사용자 mutate가 user 메시지 흔적으로 *다음 BUILD 입력*에 자연 통합 (D-022·D-008 정합).
+- **잔존 위험**: 인증/recipe 생성 API/Supabase 적용 검증 — 사용자가 마지막으로 미룸.

@@ -1,11 +1,14 @@
 :root {
   color-scheme: light;
-  --ink: #17130d;
-  --charcoal: #272018;
+  /* === D-026 디자인 시스템 SSOT === */
+  /* 색 — 스크린샷 0002 팔레트 적용 */
+  --ink: #1a1a1a;
+  --charcoal: #2a2520;
   --muted: #73685b;
   --line: #d7c7af;
   --line-strong: #1f1a13;
-  --paper: #fff8ec;
+  --paper: #f4ead7;
+  --paper-soft: #fcf3e4;
   --counter: #ead9bd;
   --panel: #fcf3e4;
   --panel-deep: #f1dfc4;
@@ -18,9 +21,17 @@
   --fail: #b33523;
   --fail-soft: rgba(179, 53, 35, 0.12);
   --gold: #b9872c;
+  --accent-green: #2a6d57;
+  --user-chip-bg: var(--ink);
+  --user-chip-fg: #ffffff;
   --shadow: 0 24px 80px rgba(45, 31, 16, 0.16);
-  --mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-  --serif: Georgia, "Times New Roman", serif;
+  /* 폰트 3종 — D-026 */
+  --font-body: var(--font-pretendard), "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --font-display: var(--font-newsreader), "Newsreader", Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  /* 호환 별칭 (기존 클래스가 var(--mono) / var(--serif) 사용) */
+  --mono: var(--font-mono);
+  --serif: var(--font-display);
 }
 
 * {
@@ -36,7 +47,7 @@ body {
     var(--paper);
   background-size: auto, 24px 24px, 24px 24px;
   color: var(--ink);
-  font-family: "Segoe UI", "Aptos", sans-serif;
+  font-family: var(--font-body);
 }
 
 button,
@@ -96,22 +107,14 @@ textarea {
 
 .command-header {
   display: grid;
-  grid-template-columns: minmax(400px, 1.08fr) minmax(420px, 1.18fr) minmax(260px, 0.74fr);
+  grid-template-columns: auto 1fr auto;
   gap: 12px;
-  align-items: stretch;
-  border: 2px solid var(--line-strong);
-  background: linear-gradient(135deg, #fff3df, #f3dfc0);
-  box-shadow: var(--shadow);
-  padding: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  padding: 12px 4px;
   position: relative;
-}
-
-.command-header::before {
-  content: "";
-  position: absolute;
-  inset: 7px;
-  border: 1px dashed rgba(23, 19, 13, 0.22);
-  pointer-events: none;
+  margin-bottom: 12px;
 }
 
 .brand-block,
@@ -136,6 +139,77 @@ textarea {
   color: var(--charcoal);
   font-family: var(--mono);
   font-size: 11px;
+}
+
+/* === D-026 헤더 brand line (0001/0002 디자인 적용) === */
+.brand-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.brand-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--heat);
+}
+
+.brand-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.brand-sep {
+  color: var(--muted);
+}
+
+.brand-recipe {
+  color: var(--muted);
+}
+
+.autosave-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.autosave-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent-green);
+}
+
+.cook-mode-btn {
+  min-height: 36px;
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #ffffff;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cook-mode-btn:hover:not(:disabled) {
+  background: #000000;
+}
+
+.cook-mode-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .eyebrow,
@@ -488,6 +562,54 @@ textarea {
   font-size: 13px;
 }
 
+.fingerprint-card {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 14px 16px 16px;
+  margin-bottom: 18px;
+}
+
+.inspector-head-sub {
+  margin-top: 4px;
+}
+
+.fp-trait-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.fp-trait-row {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fffaf1;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.fp-trait-label {
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.fp-trait-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.fp-confidence {
+  color: var(--run);
+}
+
 .step-stage {
   display: grid;
   gap: 16px;
@@ -696,6 +818,1013 @@ textarea {
   gap: 12px;
 }
 
+/* ================================================================ */
+/* PAGE 본문 — 2-pane (D-027)                                       */
+/* ================================================================ */
+
+.mode-stage {
+  display: block;
+}
+
+.page-footer-aside {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+}
+
+/* ================================================================ */
+/* BUILD MODE — 대화형 (D-021, 2026-06-21)                          */
+/* 직전 2026-06-18 IDE 풍 클래스(compile-bench/compile-grid/        */
+/* prompt-surface/compiler-output/state-inspector/prompt-editor/    */
+/* output-line/artifact-list/diff-kind)는 dead. 별도 정리 사이클로. */
+/* ================================================================ */
+
+.build-bench {
+  display: grid;
+  gap: 16px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.build-canvas {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.chat-side {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.recipe-side {
+  position: sticky;
+  top: 12px;
+  min-width: 0;
+}
+
+/* === RecipeCanvas (D-027 우측 sticky 산출물 패널) === */
+
+.recipe-canvas {
+  border: 1px solid var(--line);
+  background: #fffaf1;
+  border-radius: 10px;
+  padding: 22px 24px 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.recipe-canvas-empty {
+  background: var(--paper-soft);
+}
+
+.canvas-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.canvas-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.canvas-head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.canvas-modified {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--heat);
+  background: var(--heat-soft);
+  border: 1px solid rgba(211, 107, 44, 0.3);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.canvas-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent-green);
+}
+
+.canvas-live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent-green);
+}
+
+.canvas-live-idle {
+  color: var(--muted);
+}
+
+.canvas-live-idle .canvas-live-dot {
+  background: var(--muted);
+}
+
+.canvas-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 3vw, 38px);
+  line-height: 1.1;
+  color: var(--ink);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.canvas-concept {
+  margin: -4px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.canvas-meta {
+  display: flex;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.canvas-empty-msg {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--muted);
+  line-height: 1.5;
+  font-style: italic;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.canvas-section {
+  display: grid;
+  gap: 8px;
+}
+
+.canvas-section-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.gauges-card-inner {
+  display: grid;
+  gap: 12px;
+}
+
+.canvas-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.canvas-step {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.canvas-step-index {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #ffffff;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 24px;
+}
+
+.canvas-step-text {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.canvas-step-timer {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--heat);
+  background: var(--heat-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.canvas-meta-block {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.plan-card-mini,
+.context-meta-card-mini {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.plan-card-mini .plan-row {
+  font-size: 12px;
+}
+
+.warning-inline {
+  margin-top: 6px;
+}
+
+.stage-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+}
+
+.stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.stage-pill.stage-done {
+  color: var(--run);
+}
+
+.stage-pill.stage-active {
+  color: var(--ink);
+  background: #fffaf1;
+  border-color: var(--gold);
+  font-weight: 600;
+}
+
+.stage-marker {
+  display: inline-block;
+  min-width: 12px;
+  text-align: center;
+}
+
+.chat-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 520px;
+  min-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.chat-bubble {
+  display: flex;
+  gap: 8px;
+  max-width: 92%;
+}
+
+.bubble-chef {
+  align-self: flex-start;
+}
+
+.bubble-user {
+  align-self: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.chef-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--ink);
+  user-select: none;
+}
+
+.chat-bubble-body-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.bubble-speaker {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.bubble-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.bubble-chef .bubble-body {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.bubble-user .bubble-body {
+  background: var(--user-chip-bg);
+  border: 1px solid var(--user-chip-bg);
+  color: var(--user-chip-fg);
+}
+
+.bubble-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.typing-indicator {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.chat-alert {
+  align-self: stretch;
+}
+
+.history-toggle {
+  align-self: center;
+  min-height: auto;
+  padding: 4px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.history-toggle:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.build-input {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  background: #fffaf1;
+  border-radius: 10px;
+  padding: 14px 16px 12px;
+}
+
+.build-input textarea {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 64px;
+  font-size: 15px;
+  line-height: 1.5;
+  font-family: var(--font-body);
+}
+
+.build-input textarea:focus {
+  outline: none;
+}
+
+.build-input-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.build-input-aux {
+  display: flex;
+  gap: 6px;
+}
+
+.aux-chip {
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-soft);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.build-input-trailing {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.send-btn {
+  min-width: 36px;
+  min-height: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  border: 0;
+  background: var(--heat);
+  color: #ffffff;
+  font-size: 15px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.send-btn:disabled {
+  background: rgba(211, 107, 44, 0.35);
+  cursor: not-allowed;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: #c45f24;
+}
+
+.send-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* === BUILD 임베드: Plan 가시화 카드 (D-024) === */
+
+.plan-card {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.plan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.plan-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.plan-stage {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.plan-list {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.plan-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.plan-marker {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.plan-filled .plan-marker {
+  color: var(--run);
+}
+
+.plan-empty .plan-marker {
+  color: var(--muted);
+}
+
+.plan-label {
+  color: var(--ink);
+}
+
+.plan-empty .plan-label {
+  color: var(--muted);
+}
+
+.plan-optional {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* === BUILD 임베드: Context 메타 카드 (D-025) === */
+
+.context-meta-card {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.meta-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.meta-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.meta-empty {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.meta-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.meta-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.meta-val {
+  color: var(--ink);
+}
+
+.meta-trait-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.meta-trait-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.meta-trait-chip em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--run);
+}
+
+/* === BUILD 임베드: 산출물 카드 (D-002 생성) === */
+
+.artifact-card {
+  border: 1px solid var(--line-strong);
+  background: #fffaf1;
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.artifact-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.artifact-concept {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.artifact-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.artifact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 4px 3px 10px;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.artifact-chip .chip-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.artifact-chip em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chip-remove {
+  min-height: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--mono);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.chip-remove:hover:not(:disabled) {
+  background: var(--heat-soft);
+  color: var(--heat);
+}
+
+.chip-remove:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.tools-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 4px 1px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.artifact-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  align-items: center;
+}
+
+/* === BUILD 임베드: 게이지 (TASTE §1) === */
+
+.gauges-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.gauges-group-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.gauges-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+}
+
+.gauge-row {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) 22px auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.gauge-label {
+  color: var(--ink);
+}
+
+.gauge-buttons {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.gauge-btn {
+  min-height: 22px;
+  min-width: 22px;
+  height: 22px;
+  width: 22px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.gauge-btn:hover:not(:disabled) {
+  background: rgba(185, 135, 44, 0.12);
+  border-color: var(--gold);
+}
+
+.gauge-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.gauge-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(23, 19, 13, 0.08);
+  overflow: hidden;
+}
+
+.gauge-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--gold);
+  border-radius: 999px;
+}
+
+.gauge-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* === BUILD 임베드: 스텝 (D-005) === */
+
+.steps-card {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  background: #fffaf1;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.step-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.step-index {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  text-align: center;
+  padding: 2px 0;
+  min-width: 22px;
+}
+
+.step-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.step-timer {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--heat);
+  white-space: nowrap;
+}
+
+/* === BUILD 임베드: 수정 칩 (D-002 수정) === */
+
+.modified-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.modified-chip {
+  border: 1px solid rgba(211, 107, 44, 0.3);
+  background: var(--heat-soft);
+  color: var(--heat);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+/* === BUILD 옵션 칩 (ENGINE.md options) === */
+
+.option-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.option-chip {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.option-chip:hover {
+  background: rgba(185, 135, 44, 0.12);
+}
+
+.option-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* === BUILD 경고 (warnings) === */
+
+.warning-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  margin: 0;
+  list-style: none;
+  border: 1px dashed var(--heat);
+  background: var(--heat-soft);
+  border-radius: 6px;
+}
+
+.warning-row {
+  font-size: 12px;
+  color: var(--charcoal);
+}
+
+/* === dev shelf (헤더의 작업용 credentials 격리) === */
+
+.dev-shelf {
+  align-self: start;
+  border: 1px dashed var(--line);
+  background: rgba(252, 243, 228, 0.5);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.dev-shelf summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.dev-shelf summary::-webkit-details-marker {
+  display: none;
+}
+
+.dev-shelf summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--muted);
+  transition: transform 0.12s ease;
+}
+
+.dev-shelf[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.dev-shelf-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.dev-shelf-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dev-shelf-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
 @media (max-width: 860px) {
   .command-header,
   .ide-grid,
@@ -725,5 +1854,50 @@ textarea {
 
   .result-panel .outcome-grid {
     grid-template-columns: 1fr;
+  }
+
+  .stage-progress {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .chat-scroll {
+    max-height: 440px;
+    min-height: 320px;
+  }
+
+  .gauges-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gauge-row {
+    grid-template-columns: 60px minmax(0, 1fr) 22px auto;
+    gap: 6px;
+  }
+
+  .chat-bubble {
+    max-width: 100%;
+  }
+
+  .dev-shelf-body {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .build-canvas {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .recipe-side {
+    position: static;
+  }
+
+  .canvas-title {
+    font-size: 28px;
   }
 }

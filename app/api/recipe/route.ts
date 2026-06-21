@@ -126,10 +126,24 @@ export async function POST(request: Request): Promise<Response> {
   // [5] D-004 — Anthropic 호출 + 정확히 1회 재시도.
   try {
     const engineResponse = await callEngineWithRetry(body, buildContext);
+    // D-025: Context 투명성 — 서버가 응답 wrapper에 BuildContext 요약 노출.
+    // LLM 응답 contract(EngineResponseSchema)는 무변. 본 메타는 서버가 직접 채움.
+    const contextUsed = {
+      cold_start: buildContext.cold_start,
+      known_issues_count:
+        buildContext.runtime_log?.known_issues.length ?? 0,
+      traits_applied:
+        buildContext.fingerprint?.traits.map((t) => ({
+          key: t.key,
+          label: t.label,
+          confidence: t.confidence,
+        })) ?? [],
+    };
     return withRateLimitHeaders(
       jsonResponse(200, {
         engineResponse,
         parsedAt: new Date().toISOString(),
+        context_used: contextUsed,
       }),
       gate,
     );

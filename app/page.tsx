@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import BuildMode from "@/components/BuildMode";
 import CookMode from "@/components/CookMode";
 import Postmortem from "@/components/Postmortem";
+import FingerprintCard from "@/components/FingerprintCard";
 import type { RecipeState, Stage, StepEvent } from "@/lib/schema";
 
 type Mode = "build" | "cook" | "postmortem";
@@ -16,100 +17,73 @@ export default function HomePage(): React.ReactElement {
   const [recipeState, setRecipeState] = useState<RecipeState | null>(null);
   const [cookStartedAt, setCookStartedAt] = useState<string | null>(null);
   const [cookEvents, setCookEvents] = useState<StepEvent[]>([]);
+  const [fingerprintNonce, setFingerprintNonce] = useState(0);
 
   const userId = useMemo(() => readJwtSub(authToken), [authToken]);
   const canCook = Boolean(recipeState?.steps?.length);
-  const pipeline = [
-    {
-      key: "build",
-      label: "BUILD",
-      meta: stage === "done" ? "compiled" : `stage:${stage}`,
-      active: mode === "build",
-      enabled: true,
-      onClick: () => setMode("build"),
-    },
-    {
-      key: "cook",
-      label: "COOK",
-      meta: canCook ? "runnable" : "no steps",
-      active: mode === "cook",
-      enabled: canCook,
-      onClick: () => setMode("cook"),
-    },
-    {
-      key: "postmortem",
-      label: "POSTMORTEM",
-      meta: cookEvents.length > 0 ? `${cookEvents.length} events` : "waiting",
-      active: mode === "postmortem",
-      enabled: cookEvents.length > 0,
-      onClick: () => setMode("postmortem"),
-    },
-    {
-      key: "learn",
-      label: "LEARN",
-      meta: "RuntimeLog -> Fingerprint",
-      active: false,
-      enabled: false,
-      onClick: () => undefined,
-    },
-  ];
 
   return (
     <main className="ide-shell">
       <header className="command-header">
         <div className="brand-block">
-          <span className="eyebrow">PAIR-COOKING IDE</span>
-          <h1>바이브 레시피</h1>
-          <p>{"recipe.build() -> kitchen.run() -> postmortem.write()"}</p>
+          <span className="brand-line">
+            <span className="brand-dot" aria-hidden="true" />
+            <span className="brand-name">vibe recipe</span>
+            {recipeState?.name ? (
+              <>
+                <span className="brand-sep">·</span>
+                <span className="brand-recipe">
+                  {recipeState.name} · {stage === "done" ? "완성" : "초안"}
+                </span>
+              </>
+            ) : null}
+          </span>
         </div>
 
-        <div className="command-grid" aria-label="runtime credentials">
-          <div className="field command-field">
-            <label htmlFor="auth-token">AUTH TOKEN</label>
-            <input
-              id="auth-token"
-              value={authToken}
-              onChange={(event) => setAuthToken(event.target.value)}
-              placeholder="Bearer JWT"
-            />
+        <details className="dev-shelf" aria-label="dev credentials">
+          <summary>
+            <span className="dev-shelf-label">dev</span>
+          </summary>
+          <div className="dev-shelf-body">
+            <div className="field command-field">
+              <label htmlFor="auth-token">AUTH TOKEN</label>
+              <input
+                id="auth-token"
+                value={authToken}
+                onChange={(event) => setAuthToken(event.target.value)}
+                placeholder="Bearer JWT"
+              />
+            </div>
+            <div className="field command-field">
+              <label htmlFor="recipe-id">RECIPE ID</label>
+              <input
+                id="recipe-id"
+                value={recipeId}
+                onChange={(event) => setRecipeId(event.target.value)}
+                placeholder="uuid"
+              />
+            </div>
           </div>
-          <div className="field command-field">
-            <label htmlFor="recipe-id">RECIPE ID</label>
-            <input
-              id="recipe-id"
-              value={recipeId}
-              onChange={(event) => setRecipeId(event.target.value)}
-              placeholder="uuid"
-            />
-          </div>
-        </div>
+        </details>
 
         <div className="status-cluster" aria-label="session state">
-          <span className="status-pill ok">{authToken ? "auth:armed" : "auth:missing"}</span>
-          <span className="status-pill">{recipeId.trim() ? "recipe:linked" : "recipe:manual"}</span>
-          <span className="status-pill hot">{mode}.mode</span>
+          <span className="autosave-pill">
+            <span className="autosave-dot" aria-hidden="true" />
+            자동 저장됨
+          </span>
+          <button
+            type="button"
+            className="cook-mode-btn"
+            disabled={!canCook}
+            onClick={() => setMode("cook")}
+            aria-label="쿡 모드 진입"
+          >
+            쿡 모드 →
+          </button>
         </div>
       </header>
 
-      <div className="ide-grid">
-        <nav className="pipeline-rail" aria-label="runtime pipeline">
-          {pipeline.map((item, index) => (
-            <button
-              key={item.key}
-              type="button"
-              className="pipeline-node"
-              aria-current={item.active}
-              disabled={!item.enabled}
-              onClick={item.onClick}
-            >
-              <span className="node-index">{String(index + 1).padStart(2, "0")}</span>
-              <span className="node-label">{item.label}</span>
-              <span className="node-meta">{item.meta}</span>
-            </button>
-          ))}
-        </nav>
-
-        <section className="workbench" aria-label="active workbench">
+      <section className="mode-stage" aria-label="active mode">
         {mode === "build" ? (
           <BuildMode
             authToken={authToken}
@@ -138,39 +112,20 @@ export default function HomePage(): React.ReactElement {
             startedAt={cookStartedAt}
             events={cookEvents}
             stepCount={recipeState?.steps?.length ?? 0}
-            onSaved={() => setMode("build")}
+            onSaved={() => {
+              setFingerprintNonce((n) => n + 1);
+              setMode("build");
+            }}
           />
         ) : null}
-        </section>
+      </section>
 
-        <aside className="runtime-inspector">
-          <div className="inspector-head">
-            <span className="eyebrow">RUNTIME CONTEXT</span>
-            <h2>부엌 지문 inspector</h2>
-          </div>
-          <div className="stack">
-            <div className="metric-row">
-              <span>user.sub</span>
-              <strong>{userId ? "parsed" : "missing"}</strong>
-            </div>
-            <div className="metric-row">
-              <span>recipe_id</span>
-              <strong>{recipeId.trim() ? "linked" : "manual"}</strong>
-            </div>
-            <div className="metric-row">
-              <span>RecipeState.steps</span>
-              <strong>{recipeState?.steps?.length ?? 0}</strong>
-            </div>
-            <div className="metric-row">
-              <span>CookRun.events</span>
-              <strong>{cookEvents.length}</strong>
-            </div>
-            <div className="context-note">
-              MVP 환경: 로그인/recipe 생성 API 전까지 JWT와 기존 recipe_id를 직접 연결합니다.
-            </div>
-          </div>
-        </aside>
-      </div>
+      <aside className="page-footer-aside">
+        <FingerprintCard
+          authToken={authToken}
+          refreshNonce={fingerprintNonce}
+        />
+      </aside>
     </main>
   );
 }

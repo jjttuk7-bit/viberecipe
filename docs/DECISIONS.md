@@ -18,6 +18,8 @@
 
 **전체 상태 의미 (2026-06-15 명시화)**: `new_state`는 "변경 후 *전체* 상태"를 가리키되, P1 구현은 D-002 패치 규율(이미 확정된 필드는 다시 보내지 않음)과 결합되어 LLM이 *변경된 필드만 부분 객체*로 반환하고 코드의 `splitDiff(prev, next)`가 prev와 next를 결합하여 전체 상태를 복원하는 형태로 작동한다. Zod 스키마(`RecipeStateSchema.nullable()`, 모든 필드 optional)가 두 해석 모두 통과시키며, 결국 동일한 전체 상태를 복원한다. 변경이 없으면 `null`.
 
+**RecipeState 출처 2개 (2026-06-21 명시화, D-022 등재 동반)**: RecipeState의 *값 출처*는 (a) LLM의 `engineResponse.new_state` 또는 (b) 사용자 직접 수정(클라 mutate). 본 ADR은 "*diff*는 LLM이 아니라 코드"라는 원칙을 정한다 — *상태의 출처*는 두 가지지만 *diff 계산은 여전히 코드*(`splitDiff`)에서 일어난다. 본문 원칙 위반 0.
+
 ---
 
 ## D-002. 생성은 산출물 카드로, 수정만 diff로
@@ -29,6 +31,8 @@
 **이유**: git도 새 파일에는 +500줄 diff를 안 보여주고 파일을 보여준다. 생성은 diff가 아니다. diff는 "덜 짜게" 같은 *수정* 이후에야 빛난다. 메타포(diff)를 그대로 가져오지 말고 메타포가 풀던 문제(변경 추적)를 가져와야 한다는 일반 원칙의 첫 사례.
 
 **결과**: 빌드 리듬이 "대화 → 작은 산출물 카드 → ... → ✓ 완성 카드 → 이후 짧은 diff"로 자연스러워짐. 수정이 7줄 넘으면 접기(▸ N개 변경).
+
+**사용자 본인 수정 표시 정책 (2026-06-21 명시화, D-022 등재 동반)**: 사용자가 임베드 카드를 *직접 수정*한 경우(D-022)는 modified diff를 *표시하지 않는다*. 자기 행위를 시스템이 다시 알려주는 reminder는 노이즈. LLM 응답(`engineResponse.new_state`)으로 인한 modified만 D-002의 modified diff 분기를 탄다. `splitDiff` 호출은 *prev → LLM new_state* 비교만으로 충분 — 사용자 mutation은 그 사이에 `prev`를 갱신할 뿐.
 
 ---
 
@@ -314,3 +318,360 @@
 **결과**:
 - `components/CookMode.tsx`가 Notification과 Wake Lock을 처리한다.
 - Wake Lock 미지원 브라우저에서는 화면 잠금 시간을 늘리라는 안내를 표시한다.
+
+---
+
+## D-019. Fingerprint 클라 노출 SSOT — GET /api/fingerprint
+
+**맥락**: P1 마무리 사이클(FingerprintCard 신설)에서 사용자에게 자신의 부엌 지문(Fingerprint)을 보여주기 위해 데이터 페치 경로가 필요했다. 후보 3종 — (A) 신규 GET 라우트, (B) `/api/recipe` 또는 `/api/run` 응답 확장, (C) 클라가 `@supabase/supabase-js` anon 으로 직접 조회 — 중 결정 공백.
+
+**결정**: Fingerprint 의 클라 노출은 **신규 `GET /api/fingerprint`** 단일 경로를 SSOT 로 한다.
+1. 라우트: `app/api/fingerprint/route.ts` — `enforceRateLimit("fingerprint")` → `authenticateRequest` (D-015 SSOT 재사용) → `fetchFingerprintForUser` (D-013 패턴 1회 재시도 후 502) → `200 { fingerprint: Fingerprint | null }`.
+2. 페치 헬퍼: `lib/fingerprintStore.ts:fetchFingerprintForUser(userId)` — service-role 단건 조회 + `FingerprintSchema.parse` jsonb 안전화.
+3. **금지**: 클라(`components/*`, `app/page.tsx`)가 `@supabase/supabase-js` 로 `fingerprints` 테이블을 직접 조회하는 것.
+4. **분리 SSOT**: `lib/buildContext.ts` 의 `fingerprints` 조회와 본 헬퍼는 *목적 분리* 2개 SSOT. 전자는 BUILD 입력 결합 조회(runtime_logs + fingerprints, 실패는 502, 데이터 없음은 cold_start=true), 후자는 단건 표시 조회(실패는 502, 데이터 없음은 null). 컨텍스트가 달라 중복이 아니다.
+
+**이유**: 후보 비교:
+- **A (채택)**: D-015 인증 SSOT / D-011 rate limit / D-013 1회 재시도 패턴을 그대로 재사용. ADR 표류 0건. 라우트별 정책 명료. 향후 응답 shape 진화도 한 곳만 갱신.
+- B (응답 확장): SSOT 어긋남 — BUILD/COOK 액션과 표시 의도가 같은 응답에 섞임. 카드만 보고 싶을 때 호출 경로 없음.
+- C (클라 직접): D-015 anon 검증을 클라에 분산 + RLS 단독 의존. 클라 번들에 anon URL/key 노출 필요. **헌법 약화**.
+
+**결과**:
+- `lib/fingerprintStore.ts` 신설. `app/api/fingerprint/route.ts` 신설.
+- welding-inspector(FP.T4)가 `Grep("supabase|@supabase", components/**/*.tsx + app/**/*.tsx)` 로 클라 직접 조회 0건 검증. 매치 3건 모두 서버 라우트(`api/recipe`, `api/run`, `api/fingerprint`). SSOT 강제 통과.
+- `components/FingerprintCard.tsx` 가 `/api/fingerprint` 만 호출. Postmortem 저장 직후 `refreshNonce++` 회로로 카드 재페치 → Line 4 → Line 6(신설 가시화 가지) 자동 갱신.
+- **사용자 결정 시점**: 2026-06-20 (welding-architect 보고서 GFP-1 권고 A → 사용자 채택 — `_workspace/02b_user_decision_FPT1.md`).
+
+---
+
+## D-020. Fingerprint trait confidence 노출 형식 — 백분율
+
+**맥락**: `TraitSchema.confidence` 는 0~1 실수다(D-017 단순 비율 공식, 0.6~1.0 범위에서 의미). FingerprintCard 가 사용자에게 이 값을 어떻게 표시할지의 결정 공백. 후보 4종 — (A) 정확한 수치 "0.75", (B) 백분율 "75%", (C) 명목 등급 3단("강함/중간/약함"), (D) 백분율 + 게이지 바.
+
+**결정**: Fingerprint trait 의 confidence 는 **백분율**(`Math.round(confidence * 100) + "%"`)로 표시한다.
+
+**이유**: 후보 비교:
+- A (수치 0.75): 사용자가 *과학적 정확성* 기대 → "왜 50% 미만은 안 보이지?" 식 표현 함정. D-017 단순 규칙과 어긋나는 인상.
+- **B (채택)**: D-017 단순 비율 공식과 자연 일치. 백분율은 일반 사용자에게 가장 직관적. 추가 컷오프 결정 없음 → 결정 비용 최소.
+- C (3단 명목): 함정 최소. 단 3단 컷오프(0.6~0.75 / 0.75~0.9 / 0.9~1.0?) 자체가 또 TASTE 판단 필요 → 결정 비용 증가.
+- D (백분율 + 게이지 바): B에 시각적 강도 추가. 단 confidence 0.6 이 게이지 60% 로 시작하는 게 어색(60% 미만은 trait 미생성이라 *빈 영역*이 의미 없음).
+
+**결과**:
+- `components/FingerprintCard.tsx:renderReady` 에서 `Math.round(trait.confidence * 100) + "%"` 형식.
+- TASTE.md §5 항목 등재 — "Fingerprint trait confidence 노출은 백분율" 신규 원칙 (D-009 살아있는 문서 정신).
+- D-017 (계산 공식) 변경 시 본 ADR 자동 갱신 의무 없음 — 본 ADR 은 *표시 형식* 만 다룬다. 단 D-017 SUPERSEDED 처리 시 표시 형식 적합성 재검토 권고.
+- **사용자 결정 시점**: 2026-06-20 (welding-architect 보고서 GFP-3 권고 B → 사용자 채택 — `_workspace/02b_user_decision_FPT1.md`).
+
+---
+
+## D-021. BUILD UX 표면 — 채팅 + 옵션 칩 + 임베드 카드/게이지
+
+**맥락**: 2026-06-18 "키친 IDE 리디자인" 사이클이 `terminal-bar` / `compile-grid` / `prompt-surface` / `compiler-output` / `state-inspector` / `output-line` / `artifact-list` / `diff-kind` 같은 *코딩 메타포의 문법 자체*를 화면에 박았다. 사용자(유케이)가 2026-06-21에 v3 prototype 스크린샷을 다시 제시하며 "다른 앱들은 통째로 던지지만 우리는 *대화하며* 만들어 나간다"는 핵심 차별점을 재확인. 직전 리디자인이 §1.3·D-002·D-003의 정신을 *문법으로만* 적용했다는 평가가 architect 사전 가드에서 확정됨 (D-002 함정의 거꾸로 사례 — *메타포의 문법*은 가져왔지만 *그 문법이 풀던 문제*("페어처럼 한 줄씩 합의하며 짓는다")는 UX에서 사라짐).
+
+**결정**: BUILD 화면(`components/BuildMode.tsx`)의 UX 표면은 다음 4-요소 패턴을 SSOT로 한다:
+1. **채팅 인터페이스**: pair-chef ↔ 사용자 *대화 버블*. cold-start 인사는 클라 상수(`COLD_START_GREETING`)로 박힘 — 백엔드 messages 배열에는 들어가지 않아 `cold_start=true` 판정에 영향 없음(D-008 정합).
+2. **5-stage progress 시각화**: `concept → base → taste → steps → done` 가로 진행 표시기. 현재 stage 기준 done/active/pending 3 status. 외층 `pipeline-rail`(BUILD/COOK/POSTMORTEM/LEARN)과 *층위 분리* — 외층=모드, 내층=BUILD 스테이지(GBR-2=A 결정).
+3. **임베드 산출물/게이지/스텝/수정 칩**: pair-chef 최신 메시지에 *임베드*. D-002 분리 유지 — 생성(없던 필드 채워짐)=`<ArtifactCard>`/`<GaugesCard>`/`<StepsCard>`, 수정(있던 값 변경)=`<ModifiedChips>`. `splitDiff(prev, next)` 분기 그대로.
+4. **옵션 칩**: `engineResponse.options` 1~3개를 칩으로 노출. 클릭=user 메시지로 즉시 전송. 자유 텍스트 입력과 *동일 경로*(`submit(text?)`로 인자 합쳐서 처리).
+
+추가 결정:
+- **입력 placeholder**: "답하거나, 칩을 탭하거나, '알아서 다 해줘'" — D-003a 시그널만 박음. *실제* 즉시 빌드 분기는 ROADMAP P2.
+- **디자인 톤**: 라이트 페이퍼 톤 안에 대화 패턴 복원(GBR-1=B 결정). 헤더/Inspector/Cook/Postmortem과 시각 통일. v3 다크/황색 톤 전체 통일은 별도 사이클로 분리.
+- **`Recipe compiler` → `레시피를 같이 만들어 봐`**: 헤더 카피 일반 사용자 친화로 교체. 코딩 메타포(compiler/stdin/stdout) 표면 제거. badge `stage::{stage}`는 헌법 §2 매핑(plan mode 점진 커밋의 *상태 표시*)에 기능적이라 보존.
+- **임베드는 최신 assistant 메시지 1개에만**: `lastAssistantIdx` 분기로 과거 메시지의 카드/게이지 누적 차단 (R-BR-1).
+
+**SUPERSEDED**: 2026-06-18 키친 IDE 리디자인 패턴(compile-bench/compile-grid/prompt-surface/compiler-output/state-inspector/prompt-editor/output-line/artifact-list/diff-kind/diff-list). 본 ADR 채택과 함께 BuildMode가 더 이상 사용하지 않음. CSS dead 정리는 별도 사이클로 위임 (M-BR-1).
+
+**이유**:
+- **§1.3 한 턴 한 단계의 *체감 복원***: stage progress + 대화 흐름이 사용자가 *어디까지 왔는지*를 항상 보이게 한다. 직전 IDE 풍은 "단계"가 badge 한 줄로만 표현돼 §1.3 정신이 약화됐다.
+- **§1.2 답변이 아니라 diff의 *정신 회복***: 채팅 안 임베드 카드/게이지가 *변경의 시각화*. *문법*(diff 기호)을 안 가져왔지만 *문제*(변경 추적)는 더 강하게 해결.
+- **D-002 메타포 함정의 *거꾸로 사례 학습***: 직전 사이클이 "코딩 문법을 화면에 박으면 *코딩 같은 UX*가 된다"는 *문법 동일시 오류*. 본 ADR은 "메타포가 풀던 *문제*를 가져온다"는 D-002 일반 원칙을 BUILD UI 전체에 적용.
+- **§2 메타포 매핑의 *제대로 된 적용***: 코드베이스↔RecipeState, plan mode↔점진 빌드 파이프라인, git diff↔수정만 diff(생성은 산출물 카드) — 모두 *문제 해결 패턴*을 가져온 것이지 *문법 표면*을 가져온 게 아니다.
+
+**결과**:
+- `components/BuildMode.tsx`가 8 하위 컴포넌트(`ChatBubble`/`LatestEmbeds`/`ArtifactCard`/`GaugesCard`/`GaugeGroup`/`StepsCard`/`ModifiedChips`/`Warnings`)로 분해. 단일 파일이나 SSOT 1곳.
+- `app/globals.css`에 신규 40+ 클래스 추가 (build-bench, stage-progress, chat-scroll, chat-bubble, bubble-*, artifact-card, gauges-card, steps-card, modified-chips, option-chips, warning-card, build-input 외). 직전 IDE 풍 CSS 12종은 dead — 별도 정리 사이클로 위임.
+- `/api/recipe` 요청/응답 계약 변경 0. `splitDiff` 호출 인터페이스 변경 0. `lib/schema.ts` 변경 0. CookMode/Postmortem/FingerprintCard 변경 0.
+- welding-inspector(BR.T3) PASS 결함 0건. Line 1(BUILD→Context 주입) + 경계 B(API↔클라) 회귀 0. typecheck/test 그린.
+- **사용자 결정 시점**: 2026-06-21 (welding-architect 보고서 GBR-1=B(라이트 톤) / GBR-2=A(stage progress 패널 내부) → 사용자 채택 — `_workspace/02b_user_decision_BRT1.md`).
+- **명시적 P2 이월**:
+  - D-003a 즉시 빌드 실제 분기 로직(현재 UI 시그널만)
+  - 버전 타임라인 UI (v3 스크린샷의 `state (3/4)` 드롭다운)
+  - v3 다크 톤 전체 통일 검토 (Cook/Postmortem/Inspector 동시 작업 필요)
+  - dead CSS 12종 정리
+
+**임베드의 의미 확장 (2026-06-21 명시화, D-022 등재 동반)**: 4-요소 패턴 중 *임베드*는 본 ADR 채택 시 *읽기 전용*으로 정의됐다. D-022 채택 후 임베드는 *인터랙티브*로 확장 — ingredients 칩 ✕ / tools 칩 ✕ / gauge +/- 버튼. 단 *어떤 임베드*가 인터랙티브한지는 GAD-2 결정(본 사이클은 ingredients/tools/taste/texture 4개)에 따른다. 비편집 필드(name/concept/steps/time_min)는 *그대로 읽기 전용*. 사용자 mutate 흐름은 D-022가 SSOT.
+
+**임베드의 층위 확장 (2026-06-21 추가 명시화, D-024/D-025 등재 동반)**: 임베드 영역에 *상태 메타* 층위가 신설된다. 최상단에 `<StagePlanCard>`(D-024, 합의 항목 plan) + `<ContextMetaCard>`(D-025, 응답이 본 컨텍스트), 그 아래가 *산출물 메타* — `<ArtifactCard>` / `<GaugesCard>` / `<StepsCard>` / `<ModifiedChips>` / `<Warnings>`. 옵션 칩은 그 다음. 즉 4-요소 패턴의 *임베드*는 두 층위로 분리: (1) 상태 메타 — plan/context (2) 산출물 메타 — recipe + 변경 + 경고. 옵션 칩은 응답 직접 작용.
+
+**임베드의 공간 분리 (2026-06-21 추가 명시화, D-027 등재 동반)**: 임베드의 *층위*는 유지하되 *공간 위치*가 두 패널로 분리된다. 옵션 칩 + Warnings는 좌측 *최신 chef 버블 안* 인라인. 산출물 + 메타(plan/context) + ModifiedChips는 우측 sticky `<RecipeCanvas>`. 즉 *대화는 흐름*, *캔버스는 결과*. 이 분리가 페어 코딩 IDE 메타포(우측 코드 패널)와 정합한다. 메타는 RecipeCanvas 하단 *메타 블록* mini 변종 카드로 압축 노출. 자세한 SSOT는 D-027.
+
+---
+
+## D-022. 사용자 직접 수정 — RecipeState의 두 번째 출처 (페어 프로그래밍 정신)
+
+**맥락**: D-001은 "LLM이 new_state만 반환, 코드가 diff 계산"을 명시했고, D-021은 BUILD UX = 채팅+stage+임베드+옵션 4-요소 패턴을 정했다. 두 ADR 모두 *사용자가 임베드를 직접 수정*하는 경우를 미명시. 페어 프로그래밍의 본질은 *개발자가 한 줄 손대면 AI가 그 결과를 인지하고 다음 단계 합의*하는 양방향 흐름. 현재 BuildMode는 LLM 단방향(읽기 전용 임베드)이라 *페어 감각*이 약함. 사용자(유케이)가 2026-06-21에 "진짜 바이브 코딩처럼 작동하는 *수준 높은 설계*로의 고도화"를 요청.
+
+**결정**: RecipeState의 *값 출처*는 두 가지로 한다.
+1. **(a) LLM 출처**: `engineResponse.new_state` → `splitDiff(prev, new_state)` → 클라 mutate. *기존 흐름 그대로*.
+2. **(b) 사용자 직접 수정 출처**: 임베드 카드의 인터랙티브 컨트롤 클릭으로 직접 mutate.
+
+사용자 수정의 *흐름* (GAD-1=B+ 채택):
+1. **클라 즉시 시각 mutate** — UI 즉각 반응 (busy 중에는 잠금, R-AD-3 race 가드)
+2. **자동 user 메시지 생성** — `describeMutation(m)`이 TASTE §4 톤 메시지 본문 생성, `messages` 배열에 user 메시지 push. *fetch는 안 함*.
+3. **사용자가 다음 turn 전송 시 LLM이 공식 처리** — `submit()`이 `messages.slice(-8)` wire에 mutation 메시지 자동 포함. LLM이 변경을 인지하고 *재조정된* new_state 반환 가능 (예: 재료 줄면 시간도 줄임).
+
+본 사이클 *편집 가능 필드 범위* (GAD-2=A):
+- `ingredients` 칩 ✕ (삭제), `tools` 칩 ✕ (삭제), `taste` +/- (0~10 정수 step), `texture` +/- (0~10 정수 step)
+- *비편집*: name / concept / steps / time_min — 다음 고도화 사이클로 위임
+
+추가 규약:
+- **사용자 본인 수정은 modified diff 미표시** (GAD-6, D-002 결과 섹션 보강 한 줄). LLM 응답으로 인한 modified만 표시.
+- **stage 진행 미트리거** (GAD-7). LLM 응답만이 `engineResponse.stage`를 통해 stage 변경.
+- **모든 사용자 수정은 user 메시지 흔적** — `messages` 히스토리만 보면 *누가 무엇을 바꿨는지* 재구성 가능. D-008 용접 정신 정합.
+
+자동 user 메시지 표현 (TASTE.md §6 등재):
+- 재료 삭제: `"재료에서 '계란' 뺐어"`
+- 도구 삭제: `"'팬' 도구는 빼고 가자"`
+- 게이지 변경: `"매운맛 5 → 7"` (간결 형식)
+
+**이유**:
+- **§1.3 합의 정신 *복원***: 사용자 수정도 *한 turn*으로 본다 — 페어 프로그래밍의 자연 흐름. 직전 D-021 시점까지는 *대화*만 한 turn이었으나, 본 ADR로 *사용자 행위*도 한 turn에 합류.
+- **D-001 위반 0**: LLM은 여전히 new_state만 반환. *diff 계산*은 여전히 코드 (`splitDiff`). RecipeState 출처만 (a)/(b) 두 가지.
+- **D-002 정합**: 생성=카드, 수정=diff 원칙 그대로 — 단 *수정*의 *출처*가 (a) LLM이면 diff 표시, (b) 사용자면 미표시 (자기 행위 reminder 노이즈).
+- **TASTE §4 톤 정합**: 자동 메시지 표현이 평어 + 단호 없음 + 칭찬 0. "재료에서 X 뺐어" 같은 자연 표현.
+- **B+ 채택의 트레이드오프 이해**: A(직접 패치, 메시지 없음)는 LLM이 *왜 변경됐는지* 모름 → 합의 정신 약함. C(메시지만, 즉시 mutate 없음)는 UI 반응 느림. B+가 *즉각 반응* + *합의 정신* 동시 만족.
+
+**결과**:
+- `components/BuildMode.tsx`에 `Mutation` 타입 + `mutateRecipe`/`describeMutation`/`applyMutation` 추가. `ArtifactCard`에 `chip-remove` 버튼, `GaugesCard`에 `gauge-buttons` +/- 컨트롤.
+- `app/globals.css`에 신규 클래스: `.chip-text`, `.chip-remove`, `.tool-chip`, `.tools-line`, `.gauge-buttons`, `.gauge-btn`. `.artifact-chip` / `.gauge-row`의 grid 조정.
+- `/api/recipe` 요청/응답 계약 변경 0. `RequestBodySchema` 변경 0 — mutation 메시지는 일반 user 메시지로 통과.
+- D-001 / D-002 / D-021 *결과 섹션*에 사용자 mutate 케이스 한 줄씩 보강. 본문 무수정.
+- TASTE.md §6 mutation 표현 형식 등재 (D-009 살아있는 문서 정신).
+- **명시적 P2 이월**:
+  - 비편집 필드(name/concept/steps/time_min) 편집 도입
+  - 양 변경(`ingredients[i].amount` 수정) — 본 사이클은 *삭제만*
+  - 도구 추가 (자유 입력은 가능하나 직접 추가 UI 없음)
+  - mutation 메시지 시그널 강화 (예: `[user-edit]` prefix로 LLM이 구분 처리)
+  - 다중 undo (현재 1단계만 — D-023)
+- **사용자 결정 시점**: 2026-06-21 (welding-architect 보고서 GAD-1=B+ / GAD-2=A → 사용자 채택 — `_workspace/02b_user_decision_ADT1.md`).
+
+---
+
+## D-023. 에디트 히스토리 — 클라 messages 무한 누적 + 1단계 undo
+
+**맥락**: ENGINE.md §3과 RequestBodySchema는 *최근 8턴*만 백엔드로 보낸다 (토큰 폭주 방지). 클라 UI도 이를 따라 8턴만 보이면 *이전 합의*를 사용자가 확인 못 한다. 페어 프로그래밍의 git 메타포(점진 커밋 + 체크아웃)가 약해진다. 또 사용자가 *방금 한 변경*을 *되돌릴 수 없으면* 자신감 있는 실험이 막힌다. ROADMAP P2 `recipe_versions` 영속 저장은 인증 사이클 동반이라 *클라 메모리 내* 1단계 undo가 본 사이클의 최소 강제 지점.
+
+**결정**:
+1. **클라 messages 무한 누적** — `useState<Message[]>`가 모든 메시지 보존. slice 안 함.
+2. **백엔드 호출은 여전히 `messages.slice(-8)`** — ENGINE.md §3 / RequestBodySchema.max(8) 정합. 클라가 wire 직전에 slice.
+3. **UI 표시**:
+   - 초기 진입: 최근 `VISIBLE_ASSISTANT_LIMIT = 4` assistant turns + 사이 user 메시지만 표시 (R-AD-1 화면 과다 누적 방지)
+   - "더 이전 보기 (N개 숨김)" 펼침 버튼 상단 — 누른 후 전체 messages 표시
+   - "최근만 보기" 토글로 다시 접기
+4. **직전 되돌리기 (1단계)**:
+   - `prevSnapshot: Snapshot | null` — `{ recipeState, lastDiff, lastResponse, messages, stage }` 일괄 캡처
+   - 스냅샷 저장 트리거: ① 사용자 mutation 직전 ② LLM 호출 직전
+   - "↶ 직전 취소" 버튼 입력 행 좌측 — `prevSnapshot` 있을 때만 활성
+   - 1단계만 — `prevSnapshot`이 set되면 그 이전은 잃음 (다중 undo는 P2)
+5. **영속 X** — 세션 새로고침 시 초기화. 영속은 ROADMAP P2 `recipe_versions` 사이클.
+
+**이유**:
+- **체크아웃 메타포의 *최소 작동* 강제**: git의 *완전한* 점진 커밋·체크아웃은 영속이 필요. 본 사이클은 *세션 내* 1단계 undo만으로도 페어 감각의 *자신감 있는 실험* 가능 — 페어 프로그래밍 핵심.
+- **D-007 정합**: 영속(localStorage 등)은 본 사이클 사용 0. RuntimeLog/Fingerprint 같은 *해자 자산*은 Supabase 영속 유지. 클라 메모리 내 임시 history는 *세션 단위*라 해자 정의에 영향 0.
+- **백엔드 무손상**: messages.slice(-8) 정책 유지 — ENGINE.md §3 / RequestBodySchema 변경 0.
+
+**결과**:
+- `BuildMode`에 `historyExpanded` / `prevSnapshot` state 추가. `visibleMessages` useMemo로 4-turn 윈도우 계산.
+- `applyMutation` / `submit` / `loadFixture` 모두 `setPrevSnapshot(takeSnapshot())` 호출.
+- `undoLast()` 함수로 일괄 복원.
+- 신규 CSS 클래스 `.history-toggle`.
+- **명시적 P2 이월**:
+  - 다중 undo (현재 1단계만)
+  - 영속 (`recipe_versions` 인증 사이클 동반)
+  - 버전 타임라인 UI (`state (3/4)` 드롭다운, v3 스크린샷 패턴) — D-021 이미 P2 이월
+- **사용자 결정 시점**: 2026-06-21 (architect 권고 그대로 채택 — `_workspace/02b_user_decision_ADT1.md`).
+
+---
+
+## D-024. Plan 가시화 — stage별 필수/선택 필드 SSOT
+
+**맥락**: D-003은 *한 턴 한 단계* 점진 빌드를 정한다. STAGES 5단계(concept→base→taste→steps→done)는 코드에 있으나, *각 stage에서 어떤 필드를 합의해야 하는지* 명세가 없었다. lib/prompt.ts는 stage별 TASTE 분기(D-014)만 다루고, 필드 매핑은 *암묵*. 사용자가 *어디까지 합의했는지*를 UI에서 못 본다 → 페어 프로그래밍의 plan 패널 메타포 부재.
+
+**결정**: stage별 *필수/선택 필드 명세*를 **`lib/stagePlan.ts`** 단일 모듈에 SSOT로 둔다.
+
+1. **타입 정의**: `StagePlan = { stage, required: RecipeField[], optional: RecipeField[] }`. `RecipeField = keyof RecipeState` — 컴파일러가 schema 변경 시 본 모듈 강제 갱신.
+2. **STAGE_PLANS 5 stage**:
+   - `concept`: required `[name, concept]`
+   - `base`: required `[ingredients]`, optional `[tools, time_min]`
+   - `taste`: required `[taste]`, optional `[texture]`
+   - `steps`: required `[steps]`
+   - `done`: required *full 8필드*
+3. **isFieldFilled**: `recipeState[field] !== undefined`로 확정 판정. 배열은 `length > 0`. 부분 채움(taste 6축 일부)은 *전체 객체 존재*로 확정 — 부분 시각화는 다음 사이클.
+4. **FIELD_LABELS**: 사용자 친화 한글 라벨 (`Record<RecipeField, string>` 누락 시 컴파일 에러).
+5. **UI 적용**: `<StagePlanCard>`가 임베드 *최상단*에 위치. required → ✓/○, optional → 동일 + "선택" 배지.
+6. **금지**: lib/prompt.ts나 라우트가 *필드 매핑 재정의* 금지. 본 모듈이 단일 출처.
+
+**이유**:
+- **§1.3의 *시각화***: 사용자가 *어디까지 합의했고 어디가 남았는지* 항상 본다 — Claude Code TaskList 패턴.
+- **D-014와 *목적 분리 SSOT***: lib/prompt.ts는 *시스템 프롬프트의 TASTE 인용*, lib/stagePlan.ts는 *UI plan 정의*. 같은 stage 개념을 서로 다른 목적으로 활용 — 중복이 아닌 분리.
+- **schema 결합 강제**: `keyof RecipeState`로 lib/schema 변경 시 컴파일러가 본 모듈 강제 갱신. SSOT 표류 차단.
+
+**결과**:
+- `lib/stagePlan.ts` 신설 (47 라인, server-only 아님 — 클라 자유 import).
+- `components/BuildMode.tsx`에 `<StagePlanCard>` + `<PlanRow>` 추가. 임베드 최상단에 배치.
+- `app/globals.css`에 신규 클래스 11종(`.plan-card`, `.plan-list`, `.plan-row`, `.plan-marker`, `.plan-label`, `.plan-optional`, `.plan-filled`, `.plan-empty`, `.plan-head`, `.plan-title`, `.plan-stage`).
+- **명시적 비범위**:
+  - 부분 채움(taste 6축 일부) `partial` status — 다음 사이클
+  - stage 자체를 사용자가 *건너뛰는* UI — D-003 정신과 충돌 가능, 본 사이클 배제
+- **사용자 결정 시점**: 2026-06-21 (architect 권고 자동 채택 — `_workspace/02_welding_review_PCT1.md`).
+
+---
+
+## D-025. Context 투명성 — /api/recipe 응답 wrapper에 context_used 메타
+
+**맥락**: D-007(Fingerprint MVP 필수) + D-008(용접) + D-013(BuildContext 조회)로 *해자 자산*(known_issues, fingerprint traits)이 백엔드에 쌓이고 LLM 시스템 프롬프트에 주입된다. 그러나 *사용자는* 왜 LLM이 이 응답을 만들었는지 모른다 — 해자 가치의 *환원* 부재. FingerprintCard(D-019)가 사이드바에 trait 노출이지만, *이번 응답에 어떤 trait이 영향*인지는 보이지 않음.
+
+**결정**: `/api/recipe` 200 응답 wrapper에 **`context_used`** 메타 필드 추가. *서버가 채움*. LLM 응답 contract (`EngineResponseSchema`) 변경 0.
+
+응답 형식:
+```ts
+// 200 응답
+{
+  engineResponse: EngineResponse,                  // 기존 (D-001 무변)
+  parsedAt: string,                                 // 기존
+  context_used: {                                   // 신규
+    cold_start: boolean,
+    known_issues_count: number,
+    traits_applied: Array<{ key: string; label: string; confidence: number }>,
+  }
+}
+```
+
+UI 적용 (D-021 임베드 확장):
+- `<ContextMetaCard>`가 임베드 *최상단*에 위치(StagePlanCard 다음). 헤더 "이 응답이 참고한 것".
+- cold_start 또는 모두 빈 경우 → empty 안내 (TASTE §4 친구 톤 — "이번이 첫 시작 — 학습된 컨텍스트 없음 (맹탕 모드)" / "아직 뚜렷한 컨텍스트 없음 — 기록이 쌓이는 중").
+- 그 외: known_issues_count + traits_applied 칩 (label + confidence 백분율, D-020 정합).
+
+**이유**:
+- **D-001 무손상**: LLM이 자기가 본 컨텍스트를 *생성하지 않는다*. 서버가 *이미 들고 있는* `buildContext` 정보 변환 노출만. EngineResponseSchema 변경 0.
+- **D-007 가치 *환원***: 해자 자산이 *어떻게 사용됐는지* 사용자에 보임. FingerprintCard와 보완 — 사이드바 = *내 부엌 지문 전체*, ContextMetaCard = *이번 응답에 적용된 것*.
+- **D-013 패턴 정합**: BuildContext 조회는 [4]에서 이미 완료. [5]에서 *부수 효과 0*으로 노출만. 1회 재시도 흐름 무영향.
+- **backward-compatible**: optional 필드 추가. 과거 클라(미사용)는 무시. 신규 클라는 *없을 가능성* 대비 (`context_used?: ContextUsed`).
+
+**결과**:
+- `app/api/recipe/route.ts`의 200 응답 객체 5줄 추가. 부수 효과 0.
+- `components/BuildMode.tsx`에 `ContextUsed` 타입 + `lastContext` state + `<ContextMetaCard>` 추가. Snapshot/undo도 `lastContext` 포함.
+- `app/globals.css`에 신규 클래스 9종(`.context-meta-card`, `.meta-head`, `.meta-title`, `.meta-empty`, `.meta-rows`, `.meta-row`, `.meta-label`, `.meta-val`, `.meta-trait-chips`, `.meta-trait-chip`).
+- **명시적 비범위**:
+  - trait label *완곡 표현* — 본 사이클 그대로 노출, TASTE §6 후속에서 검토
+  - LLM 응답 안 *자연어 hint* — 시스템 프롬프트 변경 필요, 본 사이클은 데이터 메타만
+  - context_used를 *cook/postmortem 응답*에도 노출 — 본 사이클은 BUILD만
+- **사용자 결정 시점**: 2026-06-21 (architect 권고 자동 채택 — `_workspace/02_welding_review_PCT1.md`).
+
+---
+
+## D-026. 디자인 시스템 SSOT — 색 5종 + 폰트 3종 + 마이크로 요소
+
+**맥락**: 2026-06-21 사용자가 디자인 참조 스크린샷 3종(`20260621_135215_0001` / `135331_0002` / `135426_0003`)을 제시. 0002에 *색 5종 + 폰트 3종*이 명시적 디자인 시스템으로 정리돼 있음. TASTE §6은 *잠정* 상태로 "라이트 페이퍼 + 황색 강조"만 정의했고, 폰트는 시스템 폰트("Segoe UI", "Aptos")만 사용. 디자인 시스템이 *명문화*되지 않으면 컴포넌트마다 임의 hex가 박힐 위험 — D-009(임의 결정 금지) 약화.
+
+**결정**: `app/globals.css :root` 변수가 디자인 시스템 SSOT. 모든 컴포넌트는 *변수만* 참고, 하드코드 hex 금지.
+
+### 색 토큰 (5 core + 보조)
+- `--paper` `#f4ead7` — 메인 배경 (스크린샷 베이지)
+- `--paper-soft` `#fcf3e4` — 카드 / 패널 배경
+- `--ink` `#1a1a1a` — 강조 텍스트, 사용자 칩 배경 (스크린샷 검정)
+- `--heat` `#d36b2c` — 주황 액센트, 원형 전송 버튼
+- `--gold` `#b9872c` — 황색 보조 (인터랙티브 강조)
+- **신규** `--accent-green` `#2a6d57` — `live` / `자동 저장됨` 인디케이터
+- **신규** `--user-chip-bg` = `var(--ink)`, `--user-chip-fg` = `#ffffff`
+
+기존 토큰(`--line` / `--line-strong` / `--muted` / `--run` 등)은 유지 — 보조 색.
+
+### 폰트 토큰 (3종 chain)
+- `--font-body`: Pretendard chain — 본문/UI
+- `--font-display`: Newsreader chain — 레시피 제목, h1/h2
+- `--font-mono`: JetBrains Mono chain — 메타/eyebrow/스테이지 라벨
+
+등록 방식:
+- **Newsreader / JetBrains Mono**: `next/font/google` (`app/layout.tsx`에서 CSS 변수 `--font-newsreader` / `--font-jetbrains-mono` 자동 노출).
+- **Pretendard**: Google Fonts 미등록. 본 사이클은 *시스템 fallback chain* — Pretendard 설치된 환경은 자동 적용, 미설치는 `-apple-system` / `Apple SD Gothic Neo` / `Noto Sans KR` 자연 fallback. 정식 next/font/local 등록은 후속 사이클.
+
+호환 별칭: 기존 코드의 `var(--mono)`/`var(--serif)`는 새 변수로 매핑 — 회귀 0.
+
+### 마이크로 요소 규칙
+- **사용자 칩** (`.bubble-user .bubble-body`): `var(--user-chip-bg)` 배경 + `var(--user-chip-fg)` 글자 + 오른쪽 정렬
+- **pair-chef 아바타** (`.chef-avatar`): 28px 원, `var(--paper-soft)` 배경 + `var(--line)` 테두리 + "셰" 한 글자 (`var(--font-display)`)
+- **원형 전송 버튼** (`.send-btn`): 36px round, `var(--heat)` 배경 + 흰 ↑ 아이콘
+- **보조 액션 시그널** (`.aux-chip`): 좌하단 row, `var(--paper-soft)` 배경 + `var(--mono)` 폰트. 미작동(사진/음성) + 작동(직전 취소/샘플) 모두 같은 클래스, cursor로 구분.
+- **헤더 brand line** (`.brand-line`): 작은 `--heat` 점 + `vibe recipe` + `· {recipeState.name} · {초안|완성}` (이름 없으면 생략)
+- **자동 저장됨 pill** (`.autosave-pill`): `--accent-green` 점 + 텍스트, `var(--mono)`
+- **쿡 모드 버튼** (`.cook-mode-btn`): 검정(`var(--ink)`) 배경 + 흰 글자, `canCook` 조건부 활성
+
+**이유**:
+- **D-009 임의 결정 금지 정합** — 색/폰트/마이크로 요소를 SSOT 1곳(`:root` + 정의된 클래스)에 박아 컴포넌트마다 임의 디자인 결정 차단.
+- **TASTE §6 *잠정 → 확정***: 사용자가 제시한 스크린샷이 *디자인 결정의 원본*. 본 ADR은 그 결정을 코드로 옮김.
+- **헌법 정신 강화**: D-021(BUILD UX 표면)의 *디자인 시스템 부재*가 채워짐. 메타포 함정(D-002 함정의 시각판) 재발 방지 — *문법*(코딩 IDE 다크 톤 등)을 *함정처럼 가져오는* 위험을 SSOT가 가둠.
+
+**결과**:
+- `app/layout.tsx`에 next/font/google 2종 등록.
+- `app/globals.css :root` 변수 통합 갱신 + 신규 토큰 추가 + 호환 별칭.
+- `components/BuildMode.tsx` — ChatBubble role="chef" 분기(아바타 추가) + build-input 재구조화(좌측 aux + 우측 원형 전송).
+- `app/page.tsx` — 헤더 brand-line + autosave-pill + cook-mode-btn (기존 PAIR-COOKING IDE eyebrow / status-pill 3종 제거).
+- 신규 클래스 15+종 (`.brand-line`, `.brand-dot`, `.brand-name`, `.brand-sep`, `.brand-recipe`, `.autosave-pill`, `.autosave-dot`, `.cook-mode-btn`, `.build-input-aux`, `.aux-chip`, `.build-input-trailing`, `.send-btn`, `.send-count`, `.chef-avatar`, `.chat-bubble-body-wrap`).
+- `EngineResponseSchema`/`RequestBodySchema`/`lib/schema`/`/api/recipe` 모두 변경 0.
+- welding-inspector(DR1.T3) PASS 결함 0.
+- **명시적 후속 (DR2 / DR3 / cleanup)**:
+  - **DR2** 2-pane 레이아웃 — 좌측 채팅 / 우측 sticky 산출물. D-021 4-요소 패턴 *구조* 재해석 ADR.
+  - **DR3** cold-start 첫 진입 화면 `오늘, 뭐가 있어요?` 변형 — UX 패턴 변경
+  - dead CSS 정리 (`.status-pill`, IDE 풍 12종 등)
+  - Pretendard 정식 등록 (next/font/local)
+  - 모바일 별도 처리 (`.cook-mode-btn` + autosave 헤더 wrap 등)
+- **사용자 결정 시점**: 2026-06-21 (사용자 디자인 스크린샷 제시 + architect 권고 자동 채택 — `_workspace/02_welding_review_DR1T1.md`).
+
+---
+
+## D-027. 2-pane 레이아웃 — 임베드 분리 정책 (D-021 구조 재해석)
+
+**맥락**: 2026-06-21 사용자 디자인 스크린샷(0001)이 명시한 BUILD 메인은 *2-pane* — 좌측 채팅 + 우측 sticky 작성 중 레시피 카드. 직전 D-021은 *임베드*를 "최신 chef 메시지 안에 카드들이 누적된 묶음"으로 정의했으나 *공간 위치*는 미명시. DR1 시각 시스템 후에도 사용자가 "아직 이대로"라며 *전체 인상이 달라지지 않음*을 지적 — *임베드의 공간 분리*가 핵심 변경임이 확정됨.
+
+**결정**: D-021 4-요소 패턴의 *공간 위치*를 다음과 같이 분리한다.
+
+### 4-요소 공간 매핑 (D-027)
+| 요소 | 위치 |
+|------|------|
+| **채팅 흐름** (pair-chef ↔ user 버블) | `<chat-side>` (좌측) |
+| **stage-progress** (5단계) | `<build-bench>` 상단 — 양 패널 *위* stretch |
+| **임베드** | 두 곳으로 분리: |
+|   ㄴ 옵션 칩 (`engineResponse.options`) | 좌측 *최신 chef 버블 안* 인라인 |
+|   ㄴ Warnings (`engineResponse.warnings`) | 좌측 *최신 chef 버블 안* 인라인 |
+|   ㄴ 산출물 (Name/Concept/Ingredients/Tools/Time/Taste/Texture/Steps) | `<recipe-side>` (우측 sticky) — `<RecipeCanvas>` |
+|   ㄴ 메타 (StagePlan/Context) | `<RecipeCanvas>` 하단 *meta-block* — mini 변종 카드 |
+|   ㄴ ModifiedChips | `<RecipeCanvas>` 헤더 옆 *작은 칩* (`.canvas-modified`) |
+| **모드 전환** | 헤더 `쿡 모드 →` 버튼 + Cook 종료 자동 진입 |
+
+### 부수 결정
+- **`pipeline-rail` 제거**: 4-모드 전환은 헤더 버튼 + 자동 진입으로 충분. LEARN은 disabled placeholder였음.
+- **`runtime-inspector` 제거**: FingerprintCard는 `<aside class="page-footer-aside">`로 이동 (페이지 하단). session 메트릭(authToken 파싱 / recipe_id 표시)은 dev-shelf로 흡수.
+- **state 끌어올림 회피**: BuildMode가 *두 영역 모두 렌더*. 새 컴포넌트 `<RecipeCanvas>`는 props로만 통신 (mutation/state는 BuildMode 안).
+- **빈 상태**: 우측 RecipeCanvas는 응답 받기 전 *idle* 안내 ("RECIPE · 대기" + "왼쪽에서 대화로 시작해주세요. 합의가 시작되면 여기 레시피가 자라납니다.") — TASTE §4 친구 톤.
+
+**이유**:
+- **0001 디자인 정합**: 사용자가 *page-level 합의*한 디자인. 임베드가 *대화 안에 누적*이 아니라 *우측에 항상 최신 노출*이 페어 코딩의 IDE 메타포(우측 코드 패널 sticky)와 더 잘 맞음.
+- **§1.3 한 턴 한 단계 *시각 강화***: 사용자가 *항상 RecipeState의 현재 상태*를 본다. 대화는 *합의 흐름*, 캔버스는 *그 결과*. 두 역할이 분리되어 인지 부담 감소.
+- **D-002 정합**: "생성=카드 / 수정=diff" 원칙의 *공간 위치*가 우측으로 옮겨졌을 뿐, 원칙 자체는 그대로. modified diff는 `.canvas-modified` 칩으로 헤더 옆 작게.
+- **D-022/D-023 무영향**: mutation/undo 모두 BuildMode state 안. 위치만 이동. 흐름 0 변경.
+- **D-007 정신**: FingerprintCard 위치만 *페이지 하단*으로 이동. 가치 환원 강도는 동일.
+
+**결과**:
+- `app/page.tsx`: pipeline 배열 + `<nav.pipeline-rail>` + `<aside.runtime-inspector>` 제거. `<section.mode-stage>` + `<aside.page-footer-aside>`로 단순화.
+- `components/BuildMode.tsx`: 풀 재작성. `<RecipeCanvas>` / `<StagePlanCardMini>` / `<ContextMetaCardMini>` 신규 하위 컴포넌트. `<LatestEmbeds>` 제거 (역할 분산). 옵션 칩 / Warnings는 최신 chef 버블 안 인라인.
+- `app/globals.css`: 신규 클래스 30+종 (build-canvas / chat-side / recipe-side / recipe-canvas / canvas-head / canvas-title / canvas-section / canvas-steps / canvas-step-index 검정 원 + Newsreader 큰 제목 등). 모바일: 1-col stack + recipe-side static.
+- `EngineResponseSchema` / `RequestBodySchema` / `lib/schema` / `/api/recipe` 변경 0.
+- welding-inspector(DR2.T3) PASS 결함 0.
+- **명시적 비범위 / 후속**:
+  - DR3: cold-start 첫 진입 `오늘, 뭐가 있어요?` 화면 변형
+  - dead CSS 정리 (pipeline-rail / pipeline-node / runtime-inspector / workbench / ide-grid / IDE 풍 12종 등)
+  - 모바일 헤더 wrap 최적화
+  - Pretendard 정식 등록
+- **사용자 결정 시점**: 2026-06-21 (architect 권고 자동 채택 + 사용자 "바로 DR2 이어서 진행" 선택 — `_workspace/02_welding_review_DR2T1.md`).
