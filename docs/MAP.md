@@ -2,7 +2,7 @@
 
 > 새 파일/모듈을 만들면 여기 갱신한다. Claude Code가 "어디에 뭐가 있나"를 빠르게 파악하기 위한 지도.
 > 상태 표기: ✅ 구현됨 / 🚧 진행중 / 📋 placeholder (시그니처/주석만, 본문 P1+에서 채움)
-> 마지막 갱신: 2026-06-21 (세션 9 — D-027 2-pane 레이아웃 + 임베드 공간 분리)
+> 마지막 갱신: 2026-06-21 (세션 10 — D-028 cold-start hero)
 
 ---
 
@@ -37,7 +37,7 @@
 
 | 파일 | 역할 | 상태 |
 |---|---|---|
-| `components/BuildMode.tsx` | **풀 재작성(DR2 사이클, D-027)** — 2-pane 구조. `<section.build-bench> > <stage-progress> + <build-canvas grid> > <chat-side> + <recipe-side>`. 좌측 chat-side: 채팅 + 옵션 칩 + Warnings 인라인 + build-input. 우측 recipe-side: sticky `<RecipeCanvas>` (산출물 + 메타 + 변경 표식 + 빈 상태). 신규 하위 컴포넌트 `<RecipeCanvas>` / `<StagePlanCardMini>` / `<ContextMetaCardMini>`. D-022 mutation(칩 ✕ / +/-)은 RecipeCanvas에서 호출, state는 BuildMode 단일 출처. D-023 undo / messages 무한 누적 / D-024 Plan / D-025 Context / D-026 디자인 토큰 모두 정합. `/api/recipe` 요청/응답 변경 0. | ✅ |
+| `components/BuildMode.tsx` | **재작성(DR2 D-027) + 보강(DR3 D-028)** — 2-pane + cold-start hero 분기. `showHero = messages.length===0 && lastResponse===null` 조건에서 `<ColdStartHero>` 단독 렌더 (시간 라벨 + 큰 제목 + 부제 + 입력 + quickstart 5종). 평소엔 2-pane (chat-side + recipe-side sticky RecipeCanvas). 신규 하위 `<ColdStartHero>` + `formatTimeLabel` 헬퍼. D-022 mutation / D-023 undo / D-024 Plan / D-025 Context / D-026 토큰 / D-027 2-pane 모두 정합. /api/recipe 변경 0. | ✅ |
 | `components/CookMode.tsx` | F-2 COOK UI. 스텝 진행, `timer_sec` 타이머, Notification 요청, Wake Lock fallback, 핫픽스 5종 기록. RecipeState 수정 콜백 없음(D-006). | ✅ |
 | `components/Postmortem.tsx` | F-3 POSTMORTEM UI. 3단 outcome, failed 시 실패 스텝 핀포인트, `/api/run` 제출. 건너뛰기 없음. | ✅ |
 | `components/FingerprintCard.tsx` | **신설 (FP 사이클)**. 부엌 지문 프로필 노출(D-007/D-019). `GET /api/fingerprint` 호출, 4 상태(idle/loading/ready/error). `refreshNonce` prop으로 Postmortem 저장 직후 재페치(용접 가시성). confidence 백분율 표시(D-020). cold-start 메시지(TASTE §4 톤). | ✅ |
@@ -65,7 +65,7 @@
 | 파일 | 역할 |
 |---|---|
 | `../CLAUDE.md` | 최상위 헌법 (매 세션 first read). §9 변경 이력에 P0 사이클 등록. |
-| `DECISIONS.md` | ADR — D-001~D-027. D-011 = P0 셸, D-012~D-015 = P1 엔진 코어, D-016~D-018 = P1 Cook, D-019/D-020 = Fingerprint 노출, D-021 = BUILD 대화형, D-022/D-023 = 사용자 직접 수정 + 에디트 히스토리, D-024 = Plan 가시화, D-025 = Context 투명성, D-026 = 디자인 시스템 SSOT, **D-027 = 2-pane 레이아웃 (임베드 공간 분리)**. D-001/D-002/D-021 결과 섹션 누적 보강. |
+| `DECISIONS.md` | ADR — D-001~D-028. D-011 = P0 셸, D-012~D-015 = P1 엔진 코어, D-016~D-018 = P1 Cook, D-019/D-020 = Fingerprint 노출, D-021 = BUILD 대화형, D-022/D-023 = 사용자 직접 수정 + 에디트 히스토리, D-024 = Plan 가시화, D-025 = Context 투명성, D-026 = 디자인 시스템 SSOT, D-027 = 2-pane 레이아웃, **D-028 = cold-start hero (첫 진입 BUILD UX)**. D-001/D-002/D-021 결과 섹션 누적 보강. |
 | `PRD.md` | 제품 요구사항. |
 | `CONCEPT_2.0.md` | VIBE 2.0 기획서 (Cook=Run 서사 원본). |
 | `DATA_MODEL.md` | 데이터 모델 + 용접 의존성. `lib/schema.ts`·`0001_init.sql`의 의도 문서. |
@@ -102,7 +102,8 @@
 - **고도화 사이클 1 완료 (2026-06-21 세션 6)**: 사용자 직접 수정 + 에디트 히스토리. ADR D-022/D-023 등재. D-001/D-002/D-021 결과 섹션 보강.
 - **고도화 사이클 2 완료 (2026-06-21 세션 7)**: Plan 가시화 + Context 투명성. `lib/stagePlan.ts` 신설, `/api/recipe` 응답 wrapper에 `context_used` 추가, `<StagePlanCard>` + `<ContextMetaCard>` 임베드 최상단 배치. ADR D-024/D-025 등재. D-021 결과 섹션에 *임베드 2층위* 명시화. welding-inspector PC.T4 PASS 결함 0.
 - **디자인 사이클 1 (DR1) 완료 (2026-06-21 세션 8)**: 사용자 스크린샷 기반. 색 5종 + 폰트 3종 + 마이크로 요소 (pair-chef "셰" 아바타 + 사용자 칩 검정/흰 + 원형 주황 ↑ + aux-chip + 헤더 brand-line/autosave/cook-mode-btn). D-026 등재. TASTE §6 확정.
-- **디자인 사이클 2 (DR2) 완료 (2026-06-21 세션 9)**: 2-pane 레이아웃 — 좌 chat-side(채팅+옵션칩+Warnings 인라인+입력) / 우 recipe-side sticky `<RecipeCanvas>`(산출물 + 메타 mini + 변경 칩 + 빈 상태). pipeline-rail / runtime-inspector 제거. FingerprintCard 페이지 하단 이동. h1/p 제거 헤더 슬림화. D-027 등재. D-021 결과 섹션 *공간 분리* 보강. welding-inspector DR2.T3 PASS 결함 0. /api/recipe·schema 변경 0.
+- **디자인 사이클 2 (DR2) 완료 (2026-06-21 세션 9)**: 2-pane 레이아웃. D-027.
+- **디자인 사이클 3 (DR3) 완료 (2026-06-21 세션 10)**: cold-start hero — 0002 스크린샷 정합. messages=0 && lastResponse=null 분기에서 `<ColdStartHero>` 단독 렌더(시간 라벨 동적 + 큰 제목 "오늘, 뭐가 있어요?" + 부제 + 입력 + quickstart 칩 5종 "냉장고 털기/10분 야식/다이어트 한 끼/손님 초대상/아이 반찬"). 첫 입력 후 자동 2-pane 진입. D-028 등재. welding-inspector DR3.T3 PASS 결함 0. /api/recipe·schema 변경 0.
 - **빌드 가능성**: `npm run typecheck` + `npm test`(6/6) 그린.
 - **다음 큰 작업 (사용자 선언 우선순위 — API/로그인은 마지막)**:
   - 다른 고도화 축들 (② Plan 가시화 / ④ Context 투명성 / ⑤ Slash command) — 사용자 선택

@@ -1,42 +1,36 @@
-# DR2 — 2-pane 레이아웃 (좌 채팅 / 우 sticky 산출물)
+# DR3 — cold-start hero 화면 (0002 디자인)
 
-**일자**: 2026-06-21
-**근거**: 사용자 0001 디자인 스크린샷 + DR1 후 "아직 이대론데" 피드백 — *2-pane*이 디자인 인상의 핵심.
+## 동기
+0002 스크린샷의 *첫 진입* 화면 패턴 적용. 현재는 첫 진입에서도 *2-pane 채팅*이 보임 — 디자인은 *별도 hero 화면* (가운데 정렬 큰 제목 + 입력 + 시작 옵션 칩).
 
-## 분석 (스크린샷 0001)
-- **좌측**: 대화 영역 (pair-chef ↔ user 채팅 + 옵션 칩 + 입력 박스)
-- **우측 (sticky)**: 작성 중 레시피 카드
-  - 상단 `RECIPE · 작성 중` 라벨 + `• live` 인디케이터
-  - 큰 제목 (들기름 두부김치) — Newsreader serif
-  - 메타 `2인분 · 약 12분 · 쉬움`
-  - 재료 섹션 — 둥근 outline 칩들
-  - 단계 섹션 — 번호 ① ② + 텍스트
-- pipeline-rail 없음 — 헤더 `쿡 모드 →` 버튼이 모드 전환
-- runtime-inspector 없음 — Fingerprint는 별도 위치 검토
-
-## 핵심 결정 (D-021 4-요소 패턴 *구조* 재해석)
-기존 임베드(LatestEmbeds 안 7종)를 *어디로 옮길지*:
-- **산출물 카드들** (ArtifactCard/GaugesCard/StepsCard) → **우측 recipe-pane**
-- **상태 메타** (StagePlanCard/ContextMetaCard) → 우측 recipe-pane 상단 작게 (또는 좌측 채팅 위)
-- **수정/경고** (ModifiedChips/Warnings) → 우측 패널 안 (변경 표식)
-- **옵션 칩** → **좌측 채팅 안** 유지 (LLM 응답에 직접 작용)
-
-## 신규 ADR 후보
-**D-027** 2-pane 구조 — 임베드 분리 정책 (대화/산출물). 메타(plan/context)는 산출물 패널 상단. 옵션 칩만 채팅에 잔존.
+## 디자인 (0002 분석)
+- 시간 기반 라벨 `오후 7시 · 평일 종일` (작은 mono)
+- 큰 제목 `오늘, 뭐가 있어요?` (Newsreader)
+- 부제 `재료만 알려주면 같이 한 접시 완성해요.`
+- 큰 입력 박스 placeholder `두부 한 모, 신김치, 대파... 냉장고를 적어보세요!`
+  - 좌하단 `+ 사진` `i 음성`
+  - 우하단 원형 주황 ↑
+- 시작 옵션 칩 (5종): `냉장고 털기` / `10분 야식` / `다이어트 한 끼` / `손님 초대상` / `아이 반찬`
+  - 클릭 = 칩 문구를 첫 user 메시지로 submit
 
 ## 본 사이클 범위
-1. `app/page.tsx`: `.ide-grid` 단순화 — pipeline-rail / runtime-inspector 제거 (또는 작은 영역 이전)
-2. `components/BuildMode.tsx`: 좌 chat-side / 우 recipe-side 두 영역 렌더 (state 한 곳에 유지)
-3. 신규 컴포넌트: `<RecipeCanvas>` (산출물 + 메타 카드)
-4. FingerprintCard 처리 — 페이지 하단 또는 우측 패널 *접힌* 형태
-5. globals.css 신규 클래스 — `.build-canvas`, `.chat-side`, `.recipe-side`, `.recipe-canvas`, `.canvas-head`, `.canvas-title`, `.canvas-meta` 등
+1. `<ColdStartHero>` 신규 컴포넌트 — BuildMode 안 / messages.length=0 && lastResponse=null 분기
+2. 시간 라벨 (`오후 7시 · 평일 종일`) — 클라 사이드 useEffect로 동적
+3. 입력 박스 — 기존 `.build-input` 재사용
+4. 시작 옵션 칩 5종 — `quickSend` 콜백
+5. 첫 사용자 입력 → 자동으로 2-pane으로 전환 (분기 빠짐)
+
+## 비범위
+- 헤더 우측 `탐색` / `내 레시피` 메뉴 — 영속 사이클 후 (recipe_versions / 로그인 의존)
+- 동그란 아바타 — 본 사이클 placeholder 또는 생략
+
+## 신규 ADR 후보
+**D-028** cold-start hero — 첫 진입 BUILD UX. 사용자 첫 입력 전 *별도 hero 화면*. 첫 입력 후 *2-pane*으로 전환.
 
 ## 불변
-- `/api/recipe` 인터페이스 0
-- 데이터 용접 5+1 라인 회귀 0
-- D-022 mutation / D-023 undo 동작 0
-- D-024 Plan / D-025 Context 데이터 흐름 0 (위치만 변경)
-- schema 변경 0
+- /api/recipe·schema·EngineResponseSchema 변경 0
+- D-022 mutation / D-023 undo / D-024/D-025 메타 / D-026 디자인 토큰 / D-027 2-pane 모두 무손상
+- typecheck + 6/6 test 회귀 0
 
 ## 정책
-권고 자동 채택. 위험 큰 결정만 묻기. 결과 보고 후 조정.
+권고 자동 채택.

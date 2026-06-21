@@ -675,3 +675,48 @@ UI 적용 (D-021 임베드 확장):
   - 모바일 헤더 wrap 최적화
   - Pretendard 정식 등록
 - **사용자 결정 시점**: 2026-06-21 (architect 권고 자동 채택 + 사용자 "바로 DR2 이어서 진행" 선택 — `_workspace/02_welding_review_DR2T1.md`).
+
+---
+
+## D-028. cold-start hero — 첫 진입 BUILD UX
+
+**맥락**: 2026-06-21 사용자 디자인 스크린샷 0002의 cold-start 화면 — `오늘, 뭐가 있어요?` 큰 제목 + 시작 옵션 칩 5종. 현재 BUILD는 첫 진입에서도 *2-pane 채팅*이라 *처음 만나는 사용자*에게 진입 부담. 디자인은 *별도 hero 화면*으로 시작점을 명확히 제시.
+
+**결정**: `messages.length === 0 && lastResponse === null` 조건에서 BuildMode가 *별도 hero 화면* 렌더. 첫 입력(자유 텍스트 / 칩 / 샘플) 후 자동으로 평소 2-pane으로 전환.
+
+### hero 구성 (0002 정합)
+- 시간 라벨 — `{시간대} {Hour}시 · {요일}` (예: "저녁 7시 · 평일 종일"). 60초 주기 갱신.
+- 큰 제목 `오늘, 뭐가 있어요?` (Newsreader, clamp 36~56px)
+- 부제 `재료만 알려주면 같이 한 접시 완성해요.`
+- 큰 입력 박스 — placeholder `두부 한 모, 신김치, 대파... 냉장고를 적어보세요!`
+- 좌하단 aux-chip (`+ 사진` / `⏵ 음성` disabled 시그널 + `샘플`)
+- 우하단 원형 주황 ↑ send-btn
+- 시작 옵션 칩 5종 (퀵스타트): `냉장고 털기` / `10분 야식` / `다이어트 한 끼` / `손님 초대상` / `아이 반찬` — 클릭 = `submit(label)` 첫 user 메시지
+- auth 미준비 시 hint + quickstart 칩 disabled
+
+### 분류 규칙 (formatTimeLabel)
+- 시간대: 06~10시 "아침", 11~13시 "점심", 14~17시 "오후", 18~21시 "저녁", 22~05시 "밤"
+- 요일: 토/일 "주말", 평일 "평일 종일"
+
+### hero ↔ 2-pane 전환
+- 첫 submit 호출 → messages 채워짐 → `showHero=false` → 자동 2-pane 노출.
+- undoLast로 messages 0 복원 → 다시 hero 노출 (자연 — 처음으로 되돌아가는 느낌).
+
+**이유**:
+- **§1.3 "한 턴 한 단계"의 *시작점 명시***: 처음 만나는 사용자에게 *어디서 시작할지* 명확히 제시. 칩 5종이 *합의의 첫 칸*.
+- **TASTE §4 친구 톤 정합**: "오늘, 뭐가 있어요?"는 페어 셰프가 *먼저* 묻는 첫 인사. cold-start greeting(채팅 안 클라 상수)과 *역할 분리* — hero는 첫 인사 큰 화면, greeting은 첫 응답 후 채팅 상단 작은 버블.
+- **D-021/D-027 정합**: 4-요소·2-pane 패턴의 *진입 단계*만 hero로 분리. 일반 흐름은 그대로.
+- **D-022/D-023/D-024/D-025 무영향**: hero는 *0번째 턴* — 데이터 mutation/undo/Plan/Context 모두 RecipeState 부재 시점이라 자연 무관.
+- **D-026 디자인 토큰 자연 적용**: Newsreader 큰 제목 + JetBrains Mono eyebrow + send-btn / aux-chip 재사용 — 새 토큰 0.
+
+**결과**:
+- `components/BuildMode.tsx`: HERO_TITLE / HERO_SUBTITLE / HERO_INPUT_PLACEHOLDER / HERO_QUICK_STARTS 상수 + `<ColdStartHero>` 신규 + `formatTimeLabel` 헬퍼. `showHero` 분기로 평소 2-pane과 자연 공존.
+- `app/globals.css`: 신규 클래스 10종 (cold-hero, cold-hero-inner, cold-hero-eyebrow, cold-hero-title, cold-hero-subtitle, cold-hero-input, cold-hero-hint, cold-hero-quickstarts, quickstart-chip, cold-hero-alert).
+- /api/recipe·schema·EngineResponseSchema 변경 0.
+- welding-inspector(DR3.T3) PASS 결함 0.
+- **명시적 비범위 / 후속**:
+  - 헤더 우측 `탐색` / `내 레시피` 메뉴 — 영속(`recipe_versions`) + 로그인 의존
+  - 동그란 아바타 — placeholder 또는 다음 사이클
+  - quickstart 칩 카테고리 확장 — 사용자 fingerprint 기반 *맞춤 시작점* (P3)
+  - dead CSS 정리 (별도 cleanup 사이클)
+- **사용자 결정 시점**: 2026-06-21 (architect 권고 자동 채택 + "DR3 cold-start 화면 진행" — `_workspace/02_welding_review_DR3T1.md`).

@@ -69,6 +69,18 @@ const COLD_START_GREETING =
 
 const INPUT_PLACEHOLDER = "답하거나, 칩을 탭하거나, '알아서 다 해줘'";
 
+// D-028 cold-start hero
+const HERO_TITLE = "오늘, 뭐가 있어요?";
+const HERO_SUBTITLE = "재료만 알려주면 같이 한 접시 완성해요.";
+const HERO_INPUT_PLACEHOLDER = "두부 한 모, 신김치, 대파... 냉장고를 적어보세요!";
+const HERO_QUICK_STARTS = [
+  "냉장고 털기",
+  "10분 야식",
+  "다이어트 한 끼",
+  "손님 초대상",
+  "아이 반찬",
+];
+
 const TASTE_LABELS: Record<keyof Taste, string> = {
   spicy: "매운맛",
   salty: "짠맛",
@@ -286,6 +298,23 @@ export default function BuildMode({
   const editableNow = !busy;
   const hasResponse = lastResponse !== null && recipeState !== null;
 
+  // D-028 cold-start hero — 첫 입력 전 단계만
+  const showHero = messages.length === 0 && lastResponse === null;
+  if (showHero) {
+    return (
+      <ColdStartHero
+        input={input}
+        onInputChange={setInput}
+        onSubmit={(text) => void submit(text)}
+        onQuickStart={(label) => void submit(label)}
+        onLoadFixture={loadFixture}
+        busy={busy}
+        canSubmit={canSubmit(input)}
+        error={error}
+      />
+    );
+  }
+
   return (
     <section className="panel build-bench" aria-label="build-mode">
       <ol className="stage-progress" aria-label="build stages">
@@ -453,6 +482,124 @@ export default function BuildMode({
       </div>
     </section>
   );
+}
+
+// ───────────────────────────────────────────────────────────────
+// ColdStartHero (D-028 첫 진입)
+// ───────────────────────────────────────────────────────────────
+
+function ColdStartHero({
+  input,
+  onInputChange,
+  onSubmit,
+  onQuickStart,
+  onLoadFixture,
+  busy,
+  canSubmit,
+  error,
+}: {
+  input: string;
+  onInputChange: (next: string) => void;
+  onSubmit: (text?: string) => void;
+  onQuickStart: (label: string) => void;
+  onLoadFixture: () => void;
+  busy: boolean;
+  canSubmit: boolean;
+  error: string | null;
+}): React.ReactElement {
+  const [timeLabel, setTimeLabel] = useState<string>(() => formatTimeLabel(new Date()));
+
+  useEffect(() => {
+    const tick = () => setTimeLabel(formatTimeLabel(new Date()));
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <section className="cold-hero" aria-label="cold-start hero">
+      <div className="cold-hero-inner">
+        <span className="cold-hero-eyebrow">{timeLabel}</span>
+        <h1 className="cold-hero-title">{HERO_TITLE}</h1>
+        <p className="cold-hero-subtitle">{HERO_SUBTITLE}</p>
+
+        <div className="build-input cold-hero-input">
+          <textarea
+            value={input}
+            onChange={(event) => onInputChange(event.target.value)}
+            placeholder={HERO_INPUT_PLACEHOLDER}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                onSubmit();
+              }
+            }}
+          />
+          <div className="build-input-actions">
+            <div className="build-input-aux" aria-label="입력 보조 (P2)">
+              <button type="button" className="aux-chip" disabled title="P2 이월 — 사진 첨부">
+                + 사진
+              </button>
+              <button type="button" className="aux-chip" disabled title="P2 이월 — 음성 입력">
+                ⏵ 음성
+              </button>
+              <button
+                type="button"
+                className="aux-chip"
+                onClick={onLoadFixture}
+                disabled={busy}
+                title="dev 샘플 채우기"
+                style={{ cursor: !busy ? "pointer" : "not-allowed" }}
+              >
+                샘플
+              </button>
+            </div>
+            <div className="build-input-trailing">
+              <button
+                type="button"
+                className="send-btn"
+                onClick={() => onSubmit()}
+                disabled={!canSubmit}
+                aria-label={busy ? "전송 중" : "전송"}
+              >
+                {busy ? "…" : "↑"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="cold-hero-quickstarts" role="group" aria-label="시작 옵션">
+          {HERO_QUICK_STARTS.map((label) => (
+            <button
+              key={label}
+              type="button"
+              className="quickstart-chip"
+              onClick={() => onQuickStart(label)}
+              disabled={busy}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {error ? <div className="alert cold-hero-alert">{error}</div> : null}
+      </div>
+    </section>
+  );
+}
+
+function formatTimeLabel(date: Date): string {
+  const hour = date.getHours();
+  const day = date.getDay();
+  let zone: string;
+  if (hour >= 6 && hour <= 10) zone = "아침";
+  else if (hour >= 11 && hour <= 13) zone = "점심";
+  else if (hour >= 14 && hour <= 17) zone = "오후";
+  else if (hour >= 18 && hour <= 21) zone = "저녁";
+  else zone = "밤";
+  const dayLabel = day === 0 || day === 6 ? "주말" : "평일 종일";
+  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${zone} ${displayHour}시 · ${dayLabel}`;
 }
 
 // ───────────────────────────────────────────────────────────────

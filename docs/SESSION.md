@@ -4,6 +4,27 @@
 
 ---
 
+## 세션 10 — 디자인 사이클 3 (DR3): cold-start hero (D-028)
+
+**일자**: 2026-06-21 (세션 9 직후, push 후)
+**최종 판정**: DR3.T3 PASS 결함 0. D-028 등재.
+
+### 한 일
+- BuildMode에 `showHero` 분기 추가. messages=0 && lastResponse=null → `<ColdStartHero>` 단독 렌더.
+- `<ColdStartHero>` 신규 — 시간 라벨(formatTimeLabel + useEffect 60s) + 큰 제목 "오늘, 뭐가 있어요?" + 부제 + 입력 + quickstart 칩 5종("냉장고 털기" / "10분 야식" / "다이어트 한 끼" / "손님 초대상" / "아이 반찬"). auth 미준비 시 hint + 칩 disabled.
+- `app/globals.css`: cold-hero 클래스 10종. Newsreader 큰 제목 + JetBrains Mono eyebrow.
+- D-028 ADR 등재. MAP / CLAUDE §9 갱신.
+
+### 검증
+- typecheck PASS / 6/6 test PASS
+- SSR 마커 9종 + 디자인 텍스트 ("오늘, 뭐가 있어요?" / "재료만 알려주면" / "냉장고 털기" / "10분 야식" / "두부 한 모...") 모두 매치
+
+### 메모
+- undoLast로 messages 0 복원 시 hero 자동 재진입 — 자연.
+- 헤더 우측 "탐색" / "내 레시피" 메뉴는 비범위 (영속+로그인 의존).
+
+---
+
 ## 세션 9 — 디자인 사이클 2 (DR2): 2-pane 레이아웃 (D-027)
 
 **일자**: 2026-06-21 (세션 8 직후)

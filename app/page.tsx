@@ -9,10 +9,13 @@ import type { RecipeState, Stage, StepEvent } from "@/lib/schema";
 
 type Mode = "build" | "cook" | "postmortem";
 
+// 인증 토큰 / recipe_id는 로그인 사이클까지 빈 값. Vercel 배포 후 실제 로그인 흐름이
+// 세션 컨텍스트로 주입할 예정. 그 전까지 BUILD/COOK/POSTMORTEM API 호출은 401.
+const authToken = "";
+const recipeId = "";
+
 export default function HomePage(): React.ReactElement {
   const [mode, setMode] = useState<Mode>("build");
-  const [authToken, setAuthToken] = useState("");
-  const [recipeId, setRecipeId] = useState("");
   const [stage, setStage] = useState<Stage>("concept");
   const [recipeState, setRecipeState] = useState<RecipeState | null>(null);
   const [cookStartedAt, setCookStartedAt] = useState<string | null>(null);
@@ -21,6 +24,8 @@ export default function HomePage(): React.ReactElement {
 
   const userId = useMemo(() => readJwtSub(authToken), [authToken]);
   const canCook = Boolean(recipeState?.steps?.length);
+  // cold-start 추측 — BuildMode의 hero 분기와 동일한 의미: recipeState 부재 + 시작 stage
+  const isFirstEntry = recipeState === null && stage === "concept";
 
   return (
     <main className="ide-shell">
@@ -40,47 +45,25 @@ export default function HomePage(): React.ReactElement {
           </span>
         </div>
 
-        <details className="dev-shelf" aria-label="dev credentials">
-          <summary>
-            <span className="dev-shelf-label">dev</span>
-          </summary>
-          <div className="dev-shelf-body">
-            <div className="field command-field">
-              <label htmlFor="auth-token">AUTH TOKEN</label>
-              <input
-                id="auth-token"
-                value={authToken}
-                onChange={(event) => setAuthToken(event.target.value)}
-                placeholder="Bearer JWT"
-              />
-            </div>
-            <div className="field command-field">
-              <label htmlFor="recipe-id">RECIPE ID</label>
-              <input
-                id="recipe-id"
-                value={recipeId}
-                onChange={(event) => setRecipeId(event.target.value)}
-                placeholder="uuid"
-              />
-            </div>
+        {!isFirstEntry ? (
+          <div className="status-cluster" aria-label="session state">
+            <span className="autosave-pill">
+              <span className="autosave-dot" aria-hidden="true" />
+              자동 저장됨
+            </span>
+            <button
+              type="button"
+              className="cook-mode-btn"
+              disabled={!canCook}
+              onClick={() => setMode("cook")}
+              aria-label="쿡 모드 진입"
+            >
+              쿡 모드 →
+            </button>
           </div>
-        </details>
-
-        <div className="status-cluster" aria-label="session state">
-          <span className="autosave-pill">
-            <span className="autosave-dot" aria-hidden="true" />
-            자동 저장됨
-          </span>
-          <button
-            type="button"
-            className="cook-mode-btn"
-            disabled={!canCook}
-            onClick={() => setMode("cook")}
-            aria-label="쿡 모드 진입"
-          >
-            쿡 모드 →
-          </button>
-        </div>
+        ) : (
+          <span aria-hidden="true" />
+        )}
       </header>
 
       <section className="mode-stage" aria-label="active mode">
@@ -120,12 +103,14 @@ export default function HomePage(): React.ReactElement {
         ) : null}
       </section>
 
-      <aside className="page-footer-aside">
-        <FingerprintCard
-          authToken={authToken}
-          refreshNonce={fingerprintNonce}
-        />
-      </aside>
+      {!isFirstEntry ? (
+        <aside className="page-footer-aside">
+          <FingerprintCard
+            authToken={authToken}
+            refreshNonce={fingerprintNonce}
+          />
+        </aside>
+      ) : null}
     </main>
   );
 }
