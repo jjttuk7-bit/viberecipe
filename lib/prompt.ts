@@ -32,6 +32,8 @@ import {
   type Stage,
   type Trait,
 } from "@/lib/schema";
+// L2 지식 팩 (교체 가능). 현재 활성 = K-Food Formula. (VISION.md 층위)
+import { ACTIVE_PACK, renderKnowledgePack } from "@/lib/formulas";
 
 // ───────────────────────────────────────────────────────────────────────────
 // 트리밍/필터 정책 (GA-2)
@@ -71,6 +73,7 @@ export function buildSystemPrompt(args: BuildPromptArgs): string {
   sections.push(renderModeHeader(buildContext));
 
   sections.push(renderRole());
+  sections.push(renderKnowledgePack(ACTIVE_PACK)); // L2 지식 팩 (K-Food Formula)
   sections.push(renderPipeline(stage));
   sections.push(renderBatchEscapeRule()); // GA-1
   sections.push(renderFingerprintSection(buildContext.fingerprint?.traits ?? []));
