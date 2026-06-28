@@ -146,6 +146,8 @@ export default function BuildMode({
   const [streamingText, setStreamingText] = useState<string | null>(null);
   // 복수 선택(options_mode=multi) 시 토글된 항목들.
   const [picked, setPicked] = useState<string[]>([]);
+  // 완성 레시피 복사 확인 토스트.
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [prevSnapshot, setPrevSnapshot] = useState<Snapshot | null>(null);
@@ -200,6 +202,13 @@ export default function BuildMode({
     setPicked((p) =>
       p.includes(opt) ? p.filter((x) => x !== opt) : [...p, opt],
     );
+  }
+
+  function copyRecipe(): void {
+    if (!recipeState) return;
+    void navigator.clipboard?.writeText(recipeToText(recipeState));
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
   }
 
   async function submit(text?: string): Promise<void> {
@@ -434,15 +443,16 @@ export default function BuildMode({
                         <button
                           type="button"
                           className="option-confirm"
-                          onClick={() => {
-                            const sel = picked.join(", ");
-                            if (sel) void submit(sel);
-                          }}
-                          disabled={busy || picked.length === 0}
+                          onClick={() =>
+                            void submit(
+                              picked.length > 0 ? picked.join(", ") : "이대로 좋아",
+                            )
+                          }
+                          disabled={busy}
                         >
                           {picked.length > 0
                             ? `이걸로 → (${picked.length})`
-                            : "여러 개 골라도 돼"}
+                            : "이대로 좋아 →"}
                         </button>
                       </div>
                     ) : (
@@ -491,11 +501,23 @@ export default function BuildMode({
           </div>
 
           {stage === "done" ? (
-            <div className="cook-feedback" aria-label="요리 피드백">
+            <div className="cook-feedback done-card" aria-label="완성 / 요리 피드백">
+              <div className="done-head">
+                <span className="done-title">✅ 레시피 완성!</span>
+                {recipeState ? (
+                  <button
+                    type="button"
+                    className="copy-recipe-btn"
+                    onClick={copyRecipe}
+                  >
+                    {copied ? "복사됨 ✓" : "📋 레시피 복사"}
+                  </button>
+                ) : null}
+              </div>
               <span className="cook-feedback-q">
                 {savedKind
                   ? "기억해둘게요 — 다음 빌드 때 미리 반영할게요 👍"
-                  : "만들어봤어요? 어땠어요? (피드백은 다음 레시피에 반영돼요)"}
+                  : "📋 복사해서 만들어보고, 어땠는지 알려줘 — 다음 레시피에 반영돼요."}
               </span>
               <div className="cook-feedback-chips">
                 {(Object.keys(FEEDBACK_LABELS) as FeedbackKind[]).map((k) => (
@@ -1150,6 +1172,28 @@ function formatTimer(sec: number): string {
   if (m === 0) return `${s}초`;
   if (s === 0) return `${m}분`;
   return `${m}분 ${s}초`;
+}
+
+// 완성 레시피를 복사용 평문으로. (결과 활용 — 부엌에 들고 가서 보기)
+function recipeToText(r: RecipeState): string {
+  const lines: string[] = [];
+  if (r.name) lines.push(`■ ${r.name}`);
+  if (r.concept) lines.push(r.concept);
+  if (r.ingredients && r.ingredients.length > 0) {
+    lines.push("", "[재료]");
+    for (const ing of r.ingredients) lines.push(`- ${ing.name} ${ing.amount}`);
+  }
+  if (r.tools && r.tools.length > 0) lines.push("", `[도구] ${r.tools.join(", ")}`);
+  if (r.time_min) lines.push(`[시간] 약 ${r.time_min}분`);
+  if (r.steps && r.steps.length > 0) {
+    lines.push("", "[조리]");
+    r.steps.forEach((s, i) => {
+      const t = s.timer_sec > 0 ? ` (${Math.round(s.timer_sec / 60)}분)` : "";
+      lines.push(`${i + 1}. ${s.text}${t}`);
+    });
+  }
+  lines.push("", "— vibe recipe");
+  return lines.join("\n");
 }
 
 function findLastIndex<T>(

@@ -2118,3 +2118,37 @@ textarea {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* 완성 마무리 카드 + 레시피 복사 */
+.done-card {
+  border-color: var(--run);
+}
+
+.done-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.done-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--run);
+}
+
+.copy-recipe-btn {
+  min-height: 28px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--counter);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.copy-recipe-btn:hover {
+  border-color: var(--run);
+  background: var(--run-soft);
+}
