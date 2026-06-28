@@ -207,6 +207,9 @@ export default function BuildMode({
         : messages;
     const wireMessages = baseMessages.slice(-8);
 
+    // 낙관적 전환 — 사용자 메시지를 즉시 띄워 hero→2-pane 전환을 미루지 않는다.
+    // (첫 응답을 기다리는 동안 "멈춘 느낌" 제거. 셰프 스트리밍 버블이 바로 보임.)
+    setMessages(baseMessages);
     setStreamingText("");
     try {
       const response = await fetch("/api/recipe", {

@@ -14,6 +14,7 @@ import {
   StageSchema,
   type BuildContext,
   type EngineResponse,
+  type Stage,
 } from "@/lib/schema";
 import { enforceRateLimit, withRateLimitHeaders } from "@/lib/ratelimit";
 import { openaiApiKey, vibeRecipeModel } from "@/lib/env";
@@ -136,6 +137,8 @@ export async function POST(request: Request): Promise<Response> {
   });
   // R13: max(8) 이지만 한 번 더 슬라이스 — 어떤 경로로든 토큰 폭발 없음.
   const baseMessages = body.messages.slice(-8);
+  // 단계별 토큰 캡 — concept/base 는 짧으니 작게(빠르게), steps 는 크게.
+  const maxTokens = maxTokensForStage(body.stage);
 
   const encoder = new TextEncoder();
   const frame = (obj: StreamEvent): Uint8Array =>
@@ -146,12 +149,20 @@ export async function POST(request: Request): Promise<Response> {
       const emitDelta = (text: string) =>
         controller.enqueue(frame({ type: "delta", text }));
       try {
-        // JSON 모드 — 유효 JSON 보장. 스키마 검증 실패 시에만 재시도(최대 3회).
+        // JSON 모드 스트리밍 — message 토큰을 실시간으로 흘려 저지연.
+        // 유효 JSON 은 JSON 모드가 보장, 최종 검증은 완성본으로(D-001). 스키마
+        // 실패 시에만 재시도(최대 3회), 재시도 전 흘린 미리보기 폐기(reset).
         const MAX_ATTEMPTS = 3;
         let result: ParseOk | ParseFail = { ok: false, error: "init" };
         let attemptMessages: RequestBody["messages"] = baseMessages;
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-          result = await callEngineJson(system, attemptMessages);
+          if (attempt > 1) controller.enqueue(frame({ type: "reset" }));
+          result = await callEngineStreaming(
+            system,
+            attemptMessages,
+            maxTokens,
+            emitDelta,
+          );
           if (result.ok) break;
           attemptMessages = [
             ...baseMessages,
@@ -171,8 +182,7 @@ export async function POST(request: Request): Promise<Response> {
           return;
         }
 
-        // 검증된 message 를 타이핑처럼 흘린 뒤 done (실 토큰 스트리밍 대체).
-        await streamMessageChunks(result.data.message, emitDelta);
+        // 스트리밍으로 이미 message 를 흘렸으므로 바로 done (최종 검증본 동봉).
         controller.enqueue(
           frame({
             type: "done",
@@ -227,24 +237,96 @@ type StreamEvent =
 type ParseOk = { ok: true; data: EngineResponse };
 type ParseFail = { ok: false; error: string };
 
-// 한 번의 엔진 호출 — JSON 모드로 단일 객체(message 포함 6키)를 받아 검증.
-// JSON 모드가 유효 JSON 을 보장하므로 형식 실패가 거의 없다. 스키마 실패만 재시도.
-async function callEngineJson(
+// 한 번의 엔진 호출 — JSON 모드 + 스트리밍. message 값만 골라 실시간으로 흘리고
+// (저지연), 완성된 전체 JSON 을 parseEngineResponse 로 최종 검증(D-001 완결 1건).
+async function callEngineStreaming(
   system: string,
   messages: RequestBody["messages"],
+  maxTokens: number,
+  emitDelta: (text: string) => void,
 ): Promise<ParseOk | ParseFail> {
   const client = getOpenAI();
-  const resp = await client.chat.completions.create({
+  const stream = await client.chat.completions.create({
     model: vibeRecipeModel(),
-    max_tokens: MAX_TOKENS,
+    max_tokens: maxTokens,
     response_format: { type: "json_object" },
+    stream: true,
     messages: [
       { role: "system", content: system },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ],
   });
-  const raw = resp.choices[0]?.message?.content ?? "";
-  return parseEngineResponse(raw);
+  const streamer = createMessageStreamer();
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (!delta) continue;
+    const out = streamer.push(delta);
+    if (out) emitDelta(out);
+  }
+  return parseEngineResponse(streamer.full());
+}
+
+// 누적되는 JSON 에서 "message" 문자열 값만 점진 추출 → 타이핑 미리보기로 방출.
+// 미리보기일 뿐이고 권위 있는 message 는 done 의 검증본이라, 추출이 살짝 어긋나도
+// 최종 렌더는 깨끗하다(클라가 done 시 교체). 이스케이프(\", \\, \n) 처리.
+function createMessageStreamer(): {
+  push: (chunk: string) => string;
+  full: () => string;
+} {
+  let buf = "";
+  let cursor = -1; // -1: message 값 시작 전. 그 외: 다음에 읽을 절대 인덱스.
+  let done = false;
+  return {
+    full: () => buf,
+    push(chunk: string): string {
+      buf += chunk;
+      if (done) return "";
+      if (cursor === -1) {
+        const m = buf.match(/"message"\s*:\s*"/);
+        if (!m || m.index === undefined) return "";
+        cursor = m.index + m[0].length;
+      }
+      let out = "";
+      while (cursor < buf.length) {
+        const ch = buf.charAt(cursor);
+        if (ch === "\\") {
+          if (cursor + 1 >= buf.length) break; // 이스케이프 짝 대기
+          const next = buf.charAt(cursor + 1);
+          out +=
+            next === "n" ? "\n" : next === "t" ? "\t" : next === "r" ? "" : next;
+          cursor += 2;
+          continue;
+        }
+        if (ch === '"') {
+          done = true;
+          cursor += 1;
+          break;
+        }
+        out += ch;
+        cursor += 1;
+      }
+      return out;
+    },
+  };
+}
+
+// 단계별 출력 토큰 캡 — concept/base 짧게(빠르게), steps 는 JSON 부피 고려 크게.
+function maxTokensForStage(stage: Stage): number {
+  switch (stage) {
+    case "concept":
+    case "base":
+      return 700;
+    case "taste":
+    case "done":
+      return 1200;
+    case "steps":
+      return MAX_TOKENS;
+    default: {
+      const _exhaustive: never = stage;
+      void _exhaustive;
+      return MAX_TOKENS;
+    }
+  }
 }
 
 // JSON 추출 + EngineResponseSchema(message 포함 6키) 검증. D-001 보존(완결 1건).
@@ -271,18 +353,6 @@ function parseEngineResponse(raw: string): ParseOk | ParseFail {
     };
   }
   return { ok: true, data: validated.data };
-}
-
-// 타이핑 느낌 — 완결된 message 를 작은 청크로 흘린다(실 토큰 스트리밍 대체).
-async function streamMessageChunks(
-  message: string,
-  emit: (text: string) => void,
-): Promise<void> {
-  const STEP = 2; // 2글자씩, 짧은 간격 — 100자 메시지면 ~0.5초.
-  for (let i = 0; i < message.length; i += STEP) {
-    emit(message.slice(i, i + STEP));
-    await new Promise((r) => setTimeout(r, 10));
-  }
 }
 
 // D-004 "컴파일 에러 되던지기" — 검증 에러를 user 메시지로 덧붙여 재시도.
