@@ -330,18 +330,28 @@ export type BuildContext = z.infer<typeof BuildContextSchema>;
  *   - new_state는 확정 필드만 또는 null (D-001: 전체 상태 반환, diff는 코드가 계산)
  *   - change_log/warnings는 요리 관점 문장만 (LLM 자율, 길이만 가벼운 가드)
  */
+/**
+ * 선택지 — 라벨 + *왜 좋은지*. "양파:단맛으로 느끼함↓" 처럼 이유가 붙어야
+ * 사용자가 "아 이걸 넣으면!" 하고 그림 그리고 고른다 (진짜 페어링).
+ * 하위호환: 문자열로 와도 { label } 로 정규화(preprocess).
+ */
+export const EngineOptionSchema = z.preprocess(
+  (v) => (typeof v === "string" ? { label: v } : v),
+  z.object({
+    label: z.string().min(1).max(20),
+    why: z.string().min(1).max(50).optional(),
+  }),
+);
+export type EngineOption = z.infer<typeof EngineOptionSchema>;
+
 export const EngineResponseSchema = z.object({
   message: z.string().min(1),
   stage: StageSchema,
   // 누락 시 null (필수 키 빠뜨려도 응답 전체가 죽지 않게).
   new_state: RecipeStateSchema.nullable().default(null),
-  // 누락/이상 시 빈 배열. 항목은 20자 이내(verbose 모델 여유), 최대 5개.
+  // 누락/이상 시 빈 배열. 각 항목 {label, why?}. 최대 6개.
   // (warnings/change_log/options 누락이 "엔진 멈춤"의 주범 — eval 로 확인.)
-  options: z
-    .array(z.string().min(1).max(20))
-    .max(5)
-    .catch([])
-    .default([]),
+  options: z.array(EngineOptionSchema).max(6).catch([]).default([]),
   // 선택 방식: single=하나로 갈리는 선택, multi=여러 개 같이. 누락/이상 시 single.
   options_mode: z.enum(["single", "multi"]).catch("single").default("single"),
   change_log: z.array(z.string().min(1)).catch([]).default([]),

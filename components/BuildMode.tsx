@@ -419,18 +419,23 @@ export default function BuildMode({
                         aria-label="옵션 (여러 개 선택 가능)"
                       >
                         {lastResponse.options.map((opt, i) => {
-                          const on = picked.includes(opt);
+                          const on = picked.includes(opt.label);
                           return (
                             <button
-                              key={`${i}-${opt}`}
+                              key={`${i}-${opt.label}`}
                               type="button"
-                              className={`option-chip${on ? " picked" : ""}`}
-                              onClick={() => togglePick(opt)}
+                              className={`option-chip${on ? " picked" : ""}${opt.why ? " has-why" : ""}`}
+                              onClick={() => togglePick(opt.label)}
                               disabled={busy}
                               aria-pressed={on}
                             >
-                              {on ? "✓ " : ""}
-                              {opt}
+                              <span className="opt-label">
+                                {on ? "✓ " : ""}
+                                {opt.label}
+                              </span>
+                              {opt.why ? (
+                                <span className="opt-why">{opt.why}</span>
+                              ) : null}
                             </button>
                           );
                         })}
@@ -453,13 +458,16 @@ export default function BuildMode({
                       <div className="option-chips" role="group" aria-label="옵션">
                         {lastResponse.options.map((opt, i) => (
                           <button
-                            key={`${i}-${opt}`}
+                            key={`${i}-${opt.label}`}
                             type="button"
-                            className="option-chip"
-                            onClick={() => void submit(opt)}
+                            className={`option-chip${opt.why ? " has-why" : ""}`}
+                            onClick={() => void submit(opt.label)}
                             disabled={busy}
                           >
-                            {opt}
+                            <span className="opt-label">{opt.label}</span>
+                            {opt.why ? (
+                              <span className="opt-why">{opt.why}</span>
+                            ) : null}
                           </button>
                         ))}
                       </div>

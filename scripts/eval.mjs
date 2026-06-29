@@ -103,7 +103,15 @@ const CASES = [
         name: "'오이전' 안 나옴",
         fn: (r) =>
           !r.message.includes("오이전") &&
-          !(r.options ?? []).some((o) => o.includes("오이전")),
+          !(r.options ?? []).some((o) =>
+            `${o.label}${o.why ?? ""}`.includes("오이전"),
+          ),
+      },
+      {
+        name: "선택지에 why(이유) 있음",
+        fn: (r) =>
+          (r.options ?? []).length > 0 &&
+          (r.options ?? []).some((o) => o.why && o.why.length > 0),
       },
     ],
   },

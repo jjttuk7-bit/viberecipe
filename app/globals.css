@@ -2226,3 +2226,27 @@ textarea {
     transition: none;
   }
 }
+
+/* 선택지 칩 — 라벨 + '왜 좋은지'(why) 2층 (★바이브 페어링) */
+.option-chip.has-why {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  text-align: left;
+  line-height: 1.25;
+  min-height: 0;
+}
+.option-chip .opt-label {
+  font-weight: 600;
+}
+.option-chip.has-why .opt-why {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.option-chip.picked .opt-why {
+  color: var(--run);
+}
