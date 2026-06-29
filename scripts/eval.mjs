@@ -115,6 +115,18 @@ const CASES = [
       },
     ],
   },
+  {
+    name: "에이전트 드래프트 — 방향 정하면 한판(필드 캐묻기 X)",
+    stage: "base",
+    current_state: { name: "삼겹살 볶음", concept: "삼겹살 채소 볶음" },
+    messages: [{ role: "user", content: "좋아, 볶음으로 가자" }],
+    checks: [
+      {
+        name: "재료 3개+ 드래프트(주+부+양념)",
+        fn: (r) => (r.new_state?.ingredients ?? []).length >= 3,
+      },
+    ],
+  },
 ];
 
 function extractJson(raw) {
