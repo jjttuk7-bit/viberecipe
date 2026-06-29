@@ -30,7 +30,12 @@ import { z } from "zod";
  */
 const GaugeSchema = z.coerce
   .number()
-  .transform((n) => Math.max(0, Math.min(10, Math.round(n))));
+  .transform((n) =>
+    Number.isFinite(n) ? Math.max(0, Math.min(10, Math.round(n))) : 0,
+  )
+  // 누락(undefined)·이상값 → 0. 게이지 하나 때문에 응답 전체가 검증 실패해
+  // "엔진이 멈춤"이 나지 않도록 한다(구조 관대화 — 맛 단계 실패 주원인).
+  .catch(0);
 
 const TimestampSchema = z.string().datetime({ offset: true });
 
