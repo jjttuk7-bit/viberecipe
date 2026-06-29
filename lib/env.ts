@@ -45,9 +45,10 @@ export function openaiApiKey(): string {
   return requireEnv("OPENAI_API_KEY");
 }
 
-// 기본 gpt-4o-mini, 환경변수 VIBE_RECIPE_MODEL 로 교체 가능.
+// 기본 gpt-4o — eval 상 드래프트(한판 짜기)·why·신뢰성에서 mini 보다 우위
+// (에이전트 느낌). 비용 절감 필요 시 VIBE_RECIPE_MODEL=gpt-4o-mini 로 교체.
 export function vibeRecipeModel(): string {
-  return optionalEnv("VIBE_RECIPE_MODEL", "gpt-4o-mini");
+  return optionalEnv("VIBE_RECIPE_MODEL", "gpt-4o");
 }
 
 // --- Upstash (Rate Limit, P0 필수) ---
