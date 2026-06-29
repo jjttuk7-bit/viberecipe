@@ -60,6 +60,10 @@
 
 ## 4. 지식 / 검증 (해자 엔진)
 
+> ★ **원칙: K-Food Formula 는 *하나의 소스(예시)*일 뿐 절대 기준이 아니다.** 다른 요리권에 강요 금지(프롬프트가 "참고서일 뿐, 한식 아니면 일반화" 로 reframe됨). 최종 지향: **RAG 다출처 retrieve → LLM 최종 검수**. K-Food 는 그중 첫 인덱싱 소스.
+- ⬜ **RAG 지식 계층**: 여러 소스(공식·웹·DB)에서 관련 지식 retrieve → 주입. K-Food 팩은 정적 첫 버전.
+- ⬜ **LLM 최종 검수**: 생성 레시피를 retrieve된 근거 + 안전 기준에 대조해 LLM 이 검토(self-review).
+
 - ✅ L2 지식 팩 구조(`lib/formulas.ts`, 교체 가능) — 코어 요리권 무관(CLAUDE §1.5)
 - 🟡 K-Food 12 공식: 2/12 추출(고추장·김치찌개), `verified:false`
 - ✅ 검증 토대: `source`+`verified` 플래그, 검증된 것만 "공식" 단정, 지어내기 금지

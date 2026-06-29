@@ -167,7 +167,8 @@ export function renderKnowledgePack(pack: KnowledgePack): string {
   const unverified = pack.ratios.filter((r) => !r.verified);
 
   const lines = [
-    `## 지식 팩 — ${pack.title}`,
+    `## 참고 지식 — ${pack.title} (참고서일 뿐, 절대 기준 아님)`,
+    "**이 팩은 *한식일 때 참고*하는 자료다. 절대적 정답이 아니다.** 사용자가 양식·일식·중식 등 다른 요리권을 원하면 이 한식 공식에 *억지로 끼워맞추지 말고* 전문 지식으로 자유롭게 일반화하라. 한식이어도 더 나은 판단이 있으면 공식을 넘어서도 된다 — 공식은 출발점.",
     pack.doctrine,
     "",
     "### 재료-맛 역할 (조절의 근거)",
