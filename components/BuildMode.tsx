@@ -98,8 +98,6 @@ const TEXTURE_LABELS: Record<keyof Texture, string> = {
   thick: "걸쭉",
 };
 
-const VISIBLE_ASSISTANT_LIMIT = 4;
-
 // ───────────────────────────────────────────────────────────────
 // Mutation (D-022)
 // ───────────────────────────────────────────────────────────────
@@ -143,7 +141,6 @@ export default function BuildMode({
   // 완성 레시피 복사 확인 토스트.
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [prevSnapshot, setPrevSnapshot] = useState<Snapshot | null>(null);
 
   // 로컬 학습 — 부엌 지문 (localStorage). SSR 안전: 마운트 후 로드.
@@ -302,23 +299,9 @@ export default function BuildMode({
     setPrevSnapshot(null);
   }
 
-  const visibleMessages = useMemo(() => {
-    if (historyExpanded) return messages;
-    let assistantSeen = 0;
-    let startIdx = 0;
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (messages[i]?.role === "assistant") {
-        if (assistantSeen >= VISIBLE_ASSISTANT_LIMIT) {
-          startIdx = i + 1;
-          break;
-        }
-        assistantSeen += 1;
-      }
-    }
-    return messages.slice(startIdx);
-  }, [messages, historyExpanded]);
-
-  const hiddenCount = messages.length - visibleMessages.length;
+  // 대화는 통째로 남긴다(접지 않음) — 바이브 코딩처럼 전체 히스토리 유지.
+  // "진짜 이 레시피를 만드는 중" 몰입을 위해 끊지 않고 쭉 스크롤되게.
+  const visibleMessages = messages;
   const lastAssistantIdxInVisible = findLastIndex(
     visibleMessages,
     (m) => m.role === "assistant",
@@ -376,25 +359,6 @@ export default function BuildMode({
         {/* ── 좌측: 대화 + 입력 ─────────────────────── */}
         <div className="chat-side">
           <div className="chat-scroll" ref={scrollRef} aria-live="polite">
-            {hiddenCount > 0 ? (
-              <button
-                type="button"
-                className="history-toggle"
-                onClick={() => setHistoryExpanded(true)}
-              >
-                ▴ 더 이전 보기 ({hiddenCount}개 숨김)
-              </button>
-            ) : null}
-            {historyExpanded && messages.length > 0 ? (
-              <button
-                type="button"
-                className="history-toggle"
-                onClick={() => setHistoryExpanded(false)}
-              >
-                ▾ 최근만 보기
-              </button>
-            ) : null}
-
             <ChatBubble role="chef" speaker="pair-chef">
               <p className="bubble-text">{COLD_START_GREETING}</p>
             </ChatBubble>
