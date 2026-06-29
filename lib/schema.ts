@@ -333,13 +333,19 @@ export type BuildContext = z.infer<typeof BuildContextSchema>;
 export const EngineResponseSchema = z.object({
   message: z.string().min(1),
   stage: StageSchema,
-  new_state: RecipeStateSchema.nullable(),
-  options: z.array(z.string().min(1).max(15)).min(0).max(5),
-  // 선택 방식: single=하나로 갈리는 선택(조리 방향/컨셉), multi=여러 개가 같이
-  // 들어가는 선택(재료/야채/양념/토핑). 누락 시 single. UI 가 칩 동작을 가른다.
-  options_mode: z.enum(["single", "multi"]).default("single"),
-  change_log: z.array(z.string().min(1)),
-  warnings: z.array(z.string().min(1)),
+  // 누락 시 null (필수 키 빠뜨려도 응답 전체가 죽지 않게).
+  new_state: RecipeStateSchema.nullable().default(null),
+  // 누락/이상 시 빈 배열. 항목은 20자 이내(verbose 모델 여유), 최대 5개.
+  // (warnings/change_log/options 누락이 "엔진 멈춤"의 주범 — eval 로 확인.)
+  options: z
+    .array(z.string().min(1).max(20))
+    .max(5)
+    .catch([])
+    .default([]),
+  // 선택 방식: single=하나로 갈리는 선택, multi=여러 개 같이. 누락/이상 시 single.
+  options_mode: z.enum(["single", "multi"]).catch("single").default("single"),
+  change_log: z.array(z.string().min(1)).catch([]).default([]),
+  warnings: z.array(z.string().min(1)).catch([]).default([]),
 });
 export type EngineResponse = z.infer<typeof EngineResponseSchema>;
 

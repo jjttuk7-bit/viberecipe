@@ -128,14 +128,18 @@ async function runOnce(client, c) {
   });
   const raw = resp.choices[0]?.message?.content ?? "";
   const json = extractJson(raw);
-  if (!json) return { ok: false };
+  if (!json) return { ok: false, err: "JSON 객체 없음" };
   let parsed;
   try {
     parsed = EngineResponseSchema.safeParse(JSON.parse(json));
-  } catch {
-    return { ok: false };
+  } catch (e) {
+    return { ok: false, err: `JSON.parse 실패: ${e.message}` };
   }
-  return parsed.success ? { ok: true, data: parsed.data } : { ok: false };
+  if (parsed.success) return { ok: true, data: parsed.data };
+  const why = parsed.error.issues
+    .map((i) => `${i.path.join(".")}: ${i.message}`)
+    .join(" | ");
+  return { ok: false, err: why.slice(0, 240) };
 }
 
 async function main() {
@@ -164,15 +168,19 @@ async function main() {
   let totalPass = 0;
   for (const c of CASES) {
     let valid = 0;
+    let sampleErr = null;
     const passCount = Object.fromEntries(c.checks.map((k) => [k.name, 0]));
     for (let i = 0; i < RUNS; i += 1) {
       let res;
       try {
         res = await runOnce(client, c);
       } catch (e) {
-        res = { ok: false };
+        res = { ok: false, err: String(e.message) };
       }
-      if (!res.ok) continue;
+      if (!res.ok) {
+        if (!sampleErr) sampleErr = res.err;
+        continue;
+      }
       valid += 1;
       for (const chk of c.checks) {
         let p = false;
@@ -185,6 +193,7 @@ async function main() {
       }
     }
     console.log(`\n[${c.name}]  검증통과 ${valid}/${RUNS}`);
+    if (sampleErr) console.log(`   ⚠ 실패 예: ${sampleErr}`);
     for (const chk of c.checks) {
       const v = passCount[chk.name];
       totalChecks += RUNS;
